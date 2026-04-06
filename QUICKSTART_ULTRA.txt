@@ -1,0 +1,33 @@
+Isaac Ultra Deploy Package V5
+=============================
+
+Schnellstart
+------------
+Termux:
+  bash install_termux_master.sh ~/Isaac/isaac
+
+Alpine:
+  bash install_alpine_master.sh ~/Isaac/isaac
+
+Generisch:
+  bash install_master.sh ~/Isaac/isaac
+
+Zusätzliche Werkzeuge
+---------------------
+1) Kontrolle / Menü:
+   bash isaac_ctl.sh menu
+
+2) Healthcheck auf installiertem Isaac:
+   bash isaac_ctl.sh healthcheck ~/Isaac/isaac
+
+3) Healthcheck auf eingebautem Paket:
+   bash isaac_ctl.sh healthcheck-bundle
+
+4) Dashboard + Core im Hintergrund starten:
+   cd ~/Isaac/isaac && bash launch_dashboard.sh
+
+5) Dienste stoppen:
+   cd ~/Isaac/isaac && bash stop_isaac.sh
+
+6) Bundle-Update erneut anwenden:
+   bash update_master.sh ~/Isaac/isaac

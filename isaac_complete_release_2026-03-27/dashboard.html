@@ -1,0 +1,1451 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<title>Isaac v5.0 – Mission Control</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;600;700&family=Syne:wght@400;700;800;900&display=swap');
+
+:root {
+  --bg:     #05050a;
+  --bg2:    #0a0a12;
+  --bg3:    #0f0f1a;
+  --bg4:    #141420;
+  --border: #1a1a2e;
+  --border2:#252540;
+  --green:  #00e5a0;
+  --cyan:   #00cfff;
+  --yellow: #ffd166;
+  --red:    #ff4060;
+  --purple: #bd93f9;
+  --orange: #ff9500;
+  --dim:    #3a3a5a;
+  --text:   #c8c8dc;
+  --text2:  #6060a0;
+  --text3:  #404060;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  height: 100vh;
+  display: grid;
+  grid-template-rows: 44px 1fr;
+  overflow: hidden;
+}
+
+/* ── HEADER ── */
+header {
+  background: var(--bg2);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  padding: 0 1rem;
+  gap: 1rem;
+  z-index: 100;
+}
+header h1 {
+  font-family: 'Syne', sans-serif;
+  font-size: .9rem;
+  font-weight: 900;
+  color: var(--cyan);
+  letter-spacing: .08em;
+  white-space: nowrap;
+}
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--dim); flex-shrink:0; }
+.dot.on   { background: var(--green);  box-shadow: 0 0 8px var(--green); }
+.dot.boot { background: var(--yellow); animation: pulse 1s infinite; }
+.dot.err  { background: var(--red);    animation: pulse .5s infinite; }
+#conn-label { color: var(--text2); font-size: .7rem; }
+#clock { margin-left: auto; color: var(--dim); font-size: .72rem; }
+.hbtn {
+  background: none; border: 1px solid var(--border2);
+  color: var(--text2); font-family: inherit; font-size: .68rem;
+  padding: .2rem .6rem; border-radius: 3px; cursor: pointer;
+  transition: all .15s;
+}
+.hbtn:hover { border-color: var(--cyan); color: var(--cyan); }
+.hbtn.danger { border-color: var(--red); color: var(--red); }
+.hbtn.danger:hover { background: var(--red); color: var(--bg); }
+
+/* ── TABS ── */
+.tabs {
+  display: flex;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg2);
+  padding: 0 1rem;
+  gap: .2rem;
+}
+.tab {
+  padding: .35rem .8rem;
+  font-size: .7rem;
+  font-weight: 600;
+  color: var(--text2);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: all .2s;
+  letter-spacing: .05em;
+}
+.tab.active { color: var(--cyan); border-bottom-color: var(--cyan); }
+.tab:hover:not(.active) { color: var(--text); }
+.tab-badge {
+  display: inline-block;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  color: var(--yellow);
+  font-size: .6rem;
+  padding: .05rem .3rem;
+  border-radius: 2px;
+  margin-left: .3rem;
+}
+
+/* ── MAIN LAYOUT ── */
+main {
+  display: grid;
+  grid-template-columns: 240px 1fr 280px;
+  overflow: hidden;
+}
+
+/* ── SIDEBAR ── */
+.sidebar {
+  border-right: 1px solid var(--border);
+  overflow-y: auto;
+  padding: .7rem;
+  display: flex;
+  flex-direction: column;
+  gap: .6rem;
+  background: var(--bg2);
+}
+
+/* ── CARDS ── */
+.card {
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: .6rem;
+}
+.card-title {
+  font-family: 'Syne', sans-serif;
+  font-size: .62rem;
+  font-weight: 700;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--text2);
+  margin-bottom: .5rem;
+  display: flex;
+  align-items: center;
+  gap: .3rem;
+}
+.card-title .icon { color: var(--cyan); }
+
+/* ── METRICS ── */
+.metric {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: .2rem 0;
+  border-bottom: 1px solid var(--border);
+}
+.metric:last-child { border-bottom: none; }
+.ml { color: var(--text2); font-size: .68rem; }
+.mv { font-weight: 600; font-size: .72rem; }
+.mv.g  { color: var(--green); }
+.mv.y  { color: var(--yellow); }
+.mv.r  { color: var(--red); }
+.mv.c  { color: var(--cyan); }
+.mv.p  { color: var(--purple); }
+.mv.o  { color: var(--orange); }
+
+/* ── BARS ── */
+.bar-row { margin: .25rem 0; }
+.bar-lbl { display: flex; justify-content: space-between;
+           color: var(--text2); font-size: .62rem; margin-bottom: .1rem; }
+.bar-bg  { background: var(--bg); border-radius: 2px; height: 4px; }
+.bar-fill{ height: 4px; border-radius: 2px; transition: width .5s ease; }
+
+/* ── BADGES ── */
+.badge {
+  display: inline-block;
+  padding: .08rem .35rem;
+  border-radius: 2px;
+  font-size: .62rem;
+  border: 1px solid var(--dim);
+  color: var(--text2);
+  background: var(--bg4);
+}
+.badge.on   { border-color: var(--green);  color: var(--green); }
+.badge.hot  { border-color: var(--red);    color: var(--red);
+              animation: pulse .8s infinite; }
+.badge.inf  { border-color: var(--cyan);   color: var(--cyan); }
+.badge.prp  { border-color: var(--purple); color: var(--purple); }
+.badge.orn  { border-color: var(--orange); color: var(--orange); }
+
+/* ── CENTER CONTENT ── */
+.content {
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.tab-content { display: none; flex: 1; overflow: hidden; }
+.tab-content.active { display: flex; flex-direction: column; }
+
+/* ─────────────────────────────────────────────────────────────
+   TASK MANAGER (Haupt-Tab)
+───────────────────────────────────────────────────────────── */
+#tm-container {
+  flex: 1;
+  overflow-y: auto;
+  padding: .5rem;
+  display: flex;
+  flex-direction: column;
+  gap: .4rem;
+}
+
+/* Task-Zeile */
+.task-row {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: .5rem .7rem;
+  cursor: pointer;
+  transition: border-color .15s;
+  position: relative;
+}
+.task-row:hover { border-color: var(--border2); }
+.task-row.running   { border-left: 3px solid var(--yellow); }
+.task-row.done      { border-left: 3px solid var(--green); }
+.task-row.failed    { border-left: 3px solid var(--red); }
+.task-row.queued    { border-left: 3px solid var(--dim); }
+.task-row.evaluating{ border-left: 3px solid var(--purple); }
+.task-row.followup  { border-left: 3px solid var(--orange); }
+.task-row.cancelled { border-left: 3px solid var(--text3); opacity: .5; }
+.task-row.expanded  { border-color: var(--cyan); }
+
+.task-header {
+  display: grid;
+  grid-template-columns: 60px 60px 1fr 80px 60px 60px 50px;
+  gap: .4rem;
+  align-items: center;
+}
+.task-id    { color: var(--text2); font-size: .65rem; }
+.task-type  { font-size: .65rem; }
+.task-desc  { font-size: .72rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.task-prov  { color: var(--text2); font-size: .65rem; text-align: right; }
+.task-iter  { color: var(--text2); font-size: .65rem; text-align: center; }
+.task-score { font-size: .7rem; font-weight: 700; text-align: right; }
+.task-dur   { color: var(--text2); font-size: .65rem; text-align: right; }
+
+/* Fortschritts-Balken */
+.task-progress {
+  height: 2px;
+  background: var(--bg);
+  border-radius: 1px;
+  margin-top: .3rem;
+  overflow: hidden;
+}
+.task-progress-fill {
+  height: 2px;
+  border-radius: 1px;
+  transition: width .3s ease;
+}
+
+/* Expanded Detail */
+.task-detail {
+  display: none;
+  margin-top: .5rem;
+  padding-top: .5rem;
+  border-top: 1px solid var(--border);
+}
+.task-row.expanded .task-detail { display: block; }
+
+.detail-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: .4rem;
+}
+.detail-block {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: .4rem;
+  font-size: .68rem;
+}
+.detail-block.full { grid-column: 1 / -1; }
+.detail-label { color: var(--text2); margin-bottom: .2rem; font-size: .62rem; }
+.detail-value { color: var(--text); white-space: pre-wrap; word-break: break-word; max-height: 120px; overflow-y: auto; }
+
+/* Score-Balken im Detail */
+.score-bars { display: flex; flex-direction: column; gap: .2rem; }
+.score-bar-row { display: flex; align-items: center; gap: .3rem; }
+.score-bar-lbl { width: 80px; color: var(--text2); font-size: .62rem; }
+.score-bar-bg  { flex: 1; height: 5px; background: var(--bg4); border-radius: 2px; }
+.score-bar-fill{ height: 5px; border-radius: 2px; transition: width .3s; }
+.score-bar-val { width: 25px; text-align: right; color: var(--text); font-size: .62rem; }
+
+/* Task-Log */
+.task-log { max-height: 80px; overflow-y: auto; font-size: .65rem; }
+.task-log-entry { color: var(--text2); padding: .05rem 0; }
+.task-log-entry .tl-ts { color: var(--dim); margin-right: .3rem; }
+
+/* Cancel-Button */
+.task-cancel-btn {
+  background: none;
+  border: 1px solid var(--red);
+  color: var(--red);
+  font-size: .6rem;
+  padding: .1rem .3rem;
+  border-radius: 2px;
+  cursor: pointer;
+  font-family: inherit;
+}
+.task-cancel-btn:hover { background: var(--red); color: var(--bg); }
+
+/* TM-Header */
+.tm-header {
+  padding: .4rem .5rem;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  background: var(--bg2);
+}
+.tm-filter-btn {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text2);
+  font-size: .65rem;
+  padding: .15rem .4rem;
+  border-radius: 2px;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all .1s;
+}
+.tm-filter-btn.active { border-color: var(--cyan); color: var(--cyan); }
+#tm-count { color: var(--text2); font-size: .68rem; margin-left: auto; }
+
+/* ─────────────────────────────────────────────────────────────
+   LOG TAB
+───────────────────────────────────────────────────────────── */
+#log-container {
+  flex: 1; overflow-y: auto; padding: .3rem; font-size: .7rem;
+  line-height: 1.5; scroll-behavior: smooth;
+}
+.log-entry {
+  display: grid;
+  grid-template-columns: 52px 65px 70px 1fr;
+  gap: .3rem;
+  padding: .1rem .2rem;
+  border-radius: 2px;
+}
+.log-entry:hover { background: var(--bg3); }
+.log-ts    { color: var(--dim); font-size: .62rem; }
+.log-typ   { font-size: .62rem; font-weight: 600; }
+.log-caller{ color: var(--text2); font-size: .62rem; }
+.log-msg   { color: var(--text); word-break: break-word; }
+.log-entry.action   .log-typ { color: var(--cyan); }
+.log-entry.task     .log-typ { color: var(--yellow); }
+.log-entry.quality  .log-typ { color: var(--purple); }
+.log-entry.error    .log-typ { color: var(--red); }
+.log-entry.steffen_input .log-typ { color: var(--green); }
+.log-entry.isaac_output  .log-typ { color: var(--orange); }
+.log-entry.privilege .log-typ { color: var(--text2); }
+
+/* ─────────────────────────────────────────────────────────────
+   CHAT PANEL (rechte Spalte)
+───────────────────────────────────────────────────────────── */
+.chat-panel {
+  border-left: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  background: var(--bg2);
+}
+.chat-header {
+  padding: .5rem .7rem;
+  border-bottom: 1px solid var(--border);
+  font-size: .68rem;
+  color: var(--text2);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+#chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: .5rem;
+  display: flex;
+  flex-direction: column;
+  gap: .4rem;
+}
+.msg {
+  padding: .4rem .6rem;
+  border-radius: 3px;
+  font-size: .72rem;
+  line-height: 1.55;
+  max-width: 100%;
+  animation: fadeUp .15s ease;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.msg.steffen {
+  background: #0d1020;
+  border-left: 2px solid var(--cyan);
+  color: var(--cyan);
+}
+.msg.isaac {
+  background: #0a100a;
+  border-left: 2px solid var(--green);
+  color: var(--text);
+}
+.msg.system {
+  background: var(--bg4);
+  border-left: 2px solid var(--dim);
+  color: var(--text2);
+  font-size: .65rem;
+}
+.msg .who {
+  font-size: .6rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .1em;
+  opacity: .6;
+  margin-bottom: .15rem;
+}
+.msg .ts { opacity: .4; font-size: .58rem; margin-left: .3rem; }
+
+.chat-input-area {
+  padding: .5rem;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: .3rem;
+}
+#chat-input {
+  width: 100%;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--text);
+  font-family: inherit;
+  font-size: .72rem;
+  padding: .4rem .6rem;
+  outline: none;
+  resize: none;
+  height: 60px;
+  transition: border-color .2s;
+}
+#chat-input:focus { border-color: var(--cyan); }
+.chat-btns { display: flex; gap: .3rem; }
+.chat-send {
+  flex: 1;
+  background: var(--cyan);
+  color: var(--bg);
+  border: none;
+  border-radius: 3px;
+  font-family: 'Syne', sans-serif;
+  font-weight: 700;
+  font-size: .68rem;
+  padding: .3rem;
+  cursor: pointer;
+  transition: opacity .2s;
+}
+.chat-send:hover { opacity: .85; }
+.chat-send:disabled { opacity: .3; cursor: not-allowed; }
+
+/* Typing */
+.typing-dots span {
+  animation: blink 1.2s infinite;
+  color: var(--green);
+}
+.typing-dots span:nth-child(2) { animation-delay: .2s; }
+.typing-dots span:nth-child(3) { animation-delay: .4s; }
+
+/* ─────────────────────────────────────────────────────────────
+   PROVIDER STATUS TAB
+───────────────────────────────────────────────────────────── */
+#providers-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: .5rem;
+  padding: .7rem;
+  overflow-y: auto;
+  flex: 1;
+}
+.prov-card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: .6rem;
+}
+.prov-card.primary { border-color: var(--cyan); }
+.prov-card.unavail { opacity: .4; }
+.prov-name { font-size: .75rem; font-weight: 600; margin-bottom: .3rem; }
+.prov-model { color: var(--text2); font-size: .65rem; margin-bottom: .2rem; }
+.prov-rate  { color: var(--dim);   font-size: .62rem; }
+
+/* ─────────────────────────────────────────────────────────────
+   DIRECTIVES TAB
+───────────────────────────────────────────────────────────── */
+#directives-list { padding: .7rem; overflow-y: auto; flex: 1; }
+.directive-row {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: .5rem .7rem;
+  margin-bottom: .4rem;
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+}
+.dir-priority { color: var(--yellow); font-size: .7rem; font-weight: 700; width: 24px; }
+.dir-text     { flex: 1; font-size: .72rem; }
+.dir-id       { color: var(--dim); font-size: .62rem; }
+.dir-revoke   {
+  background: none; border: 1px solid var(--red);
+  color: var(--red); font-size: .6rem; padding: .1rem .3rem;
+  border-radius: 2px; cursor: pointer; font-family: inherit;
+}
+.dir-revoke:hover { background: var(--red); color: var(--bg); }
+.directive-add-form {
+  display: flex;
+  gap: .4rem;
+  padding: .5rem 0;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: .5rem;
+}
+.directive-add-form input {
+  flex: 1;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-family: inherit;
+  font-size: .72rem;
+  padding: .3rem .5rem;
+  border-radius: 3px;
+  outline: none;
+}
+.directive-add-form input:focus { border-color: var(--cyan); }
+
+/* ── Animations ── */
+@keyframes pulse   { 0%,100%{opacity:1} 50%{opacity:.3} }
+@keyframes fadeUp  { from{opacity:0;transform:translateY(3px)} to{opacity:1;transform:none} }
+@keyframes blink   { 0%,100%{opacity:.2} 50%{opacity:1} }
+@keyframes flash   { 0%{background:rgba(0,229,160,.1)} 100%{background:transparent} }
+.flash-new         { animation: flash .8s ease; }
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar { width: 3px; height: 3px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--dim); border-radius: 2px; }
+
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header>
+  <div class="dot boot" id="conn-dot"></div>
+  <h1>⚡ ISAAC – MISSION CONTROL</h1>
+  <span id="conn-label">Verbinde...</span>
+  <button class="hbtn" onclick="sendCommand('status')">Status</button>
+  <button class="hbtn danger" id="pause-btn" onclick="togglePause()">Pause</button>
+  <span id="clock">--:--:--</span>
+</header>
+
+<!-- FULL LAYOUT -->
+<div style="display:grid;grid-template-rows:auto 1fr;overflow:hidden;height:calc(100vh - 44px)">
+
+<!-- TABS -->
+<div class="tabs">
+  <div class="tab active" onclick="showTab('taskmanager')">
+    ⚙ Task-Manager <span class="tab-badge" id="tab-running">0</span>
+  </div>
+  <div class="tab" onclick="showTab('log')">
+    📡 Audit-Log <span class="tab-badge" id="tab-log">0</span>
+  </div>
+  <div class="tab" onclick="showTab('providers')">
+    🔌 Provider
+  </div>
+  <div class="tab" onclick="showTab('directives')">
+    📋 Direktiven <span class="tab-badge" id="tab-dir">0</span>
+  </div>
+</div>
+
+<!-- MAIN -->
+<main>
+
+  <!-- LINKE SIDEBAR: System-Metriken -->
+  <div class="sidebar">
+
+    <!-- System -->
+    <div class="card">
+      <div class="card-title"><span class="icon">◈</span> System</div>
+      <div class="metric"><span class="ml">Status</span>
+        <span id="sys-status" class="badge on">ONLINE</span></div>
+      <div class="metric"><span class="ml">Tasks Total</span>
+        <span class="mv c" id="m-total">0</span></div>
+      <div class="metric"><span class="ml">Running</span>
+        <span class="mv y" id="m-running">0</span></div>
+      <div class="metric"><span class="ml">Queue</span>
+        <span class="mv" id="m-queue">0</span></div>
+      <div class="metric"><span class="ml">Avg Score</span>
+        <span class="mv g" id="m-avgscore">–</span></div>
+    </div>
+
+    <!-- Logic -->
+    <div class="card">
+      <div class="card-title"><span class="icon">🧠</span> Logic-Modul</div>
+      <div class="metric"><span class="ml">Bewertet</span>
+        <span class="mv c" id="l-evaluated">0</span></div>
+      <div class="metric"><span class="ml">Nachfragen</span>
+        <span class="mv y" id="l-followups">0</span></div>
+      <div class="metric"><span class="ml">Switches</span>
+        <span class="mv o" id="l-switches">0</span></div>
+      <div class="metric"><span class="ml">Zerlegungen</span>
+        <span class="mv p" id="l-decomps">0</span></div>
+      <div class="metric"><span class="ml">Min-Score</span>
+        <span class="mv" id="l-minscore">5.5</span></div>
+    </div>
+
+    <!-- Memory -->
+    <div class="card">
+      <div class="card-title"><span class="icon">💾</span> Gedächtnis</div>
+      <div class="metric"><span class="ml">Konversationen</span>
+        <span class="mv c" id="mem-conv">0</span></div>
+      <div class="metric"><span class="ml">Fakten</span>
+        <span class="mv g" id="mem-facts">0</span></div>
+      <div class="metric"><span class="ml">Task-Ergebnisse</span>
+        <span class="mv" id="mem-tasks">0</span></div>
+      <div class="metric"><span class="ml">Working Memory</span>
+        <span class="mv" id="mem-working">0</span></div>
+    </div>
+
+    <!-- Audit -->
+    <div class="card">
+      <div class="card-title"><span class="icon">🔒</span> Audit</div>
+      <div class="metric"><span class="ml">Log-Einträge</span>
+        <span class="mv" id="a-total">0</span></div>
+      <div class="metric"><span class="ml">Datei-Größe</span>
+        <span class="mv" id="a-size">0 KB</span></div>
+    </div>
+
+    <!-- Direktiven-Schnellansicht -->
+    <div class="card">
+      <div class="card-title"><span class="icon">📋</span> Aktive Direktiven</div>
+      <div id="sidebar-directives" style="font-size:.65rem;color:var(--text2)">
+        <em>Keine</em>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- CENTER CONTENT -->
+  <div class="content">
+
+    <!-- TAB: Task-Manager -->
+    <div class="tab-content active" id="tab-taskmanager">
+      <div class="tm-header">
+        <button class="tm-filter-btn active" data-filter="all" onclick="setFilter('all',this)">Alle</button>
+        <button class="tm-filter-btn" data-filter="running" onclick="setFilter('running',this)">Running</button>
+        <button class="tm-filter-btn" data-filter="done" onclick="setFilter('done',this)">Done</button>
+        <button class="tm-filter-btn" data-filter="failed" onclick="setFilter('failed',this)">Failed</button>
+        <button class="tm-filter-btn" data-filter="queued" onclick="setFilter('queued',this)">Queue</button>
+        <span id="tm-count" style="margin-left:auto;color:var(--text2);font-size:.68rem">0 Tasks</span>
+      </div>
+      <div id="tm-container"></div>
+    </div>
+
+    <!-- TAB: Audit-Log -->
+    <div class="tab-content" id="tab-log">
+      <div class="tm-header">
+        <button class="tm-filter-btn active" data-lfilter="all" onclick="setLogFilter('all',this)">Alle</button>
+        <button class="tm-filter-btn" data-lfilter="task" onclick="setLogFilter('task',this)">Tasks</button>
+        <button class="tm-filter-btn" data-lfilter="quality" onclick="setLogFilter('quality',this)">Quality</button>
+        <button class="tm-filter-btn" data-lfilter="error" onclick="setLogFilter('error',this)">Fehler</button>
+        <button class="tm-filter-btn" data-lfilter="steffen_input" onclick="setLogFilter('steffen_input',this)">Steffen</button>
+        <button class="tm-filter-btn" data-lfilter="isaac_output" onclick="setLogFilter('isaac_output',this)">Isaac</button>
+        <span id="log-count-label" style="margin-left:auto;color:var(--text2);font-size:.68rem">0 Einträge</span>
+      </div>
+      <div id="log-container"></div>
+    </div>
+
+    <!-- TAB: Provider -->
+    <div class="tab-content" id="tab-providers">
+      <div id="providers-grid"></div>
+    </div>
+
+    <!-- TAB: Direktiven -->
+    <div class="tab-content" id="tab-directives">
+      <div id="directives-list">
+        <div class="directive-add-form">
+          <input id="dir-input" type="text"
+                 placeholder="Neue Direktive: z.B. 'Antworte immer auf Deutsch'">
+          <button class="hbtn" onclick="addDirective()">+ Setzen</button>
+        </div>
+        <div id="dir-rows"></div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- RECHTE SPALTE: Chat -->
+  <div class="chat-panel">
+    <div class="chat-header">
+      <span>💬 Steffen → Isaac</span>
+      <span id="chat-status" style="color:var(--dim)">offline</span>
+    </div>
+    <div id="chat-messages"></div>
+    <div class="chat-input-area">
+      <textarea id="chat-input"
+                placeholder="Eingabe (Strg+Enter = senden)..."
+                disabled></textarea>
+      <div class="chat-btns">
+        <button class="chat-send" id="chat-send-btn" onclick="sendChat()" disabled>
+          ▶ Senden
+        </button>
+      </div>
+    </div>
+  </div>
+
+</main>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════════════════════
+const state = {
+  tasks:    {},    // id → task
+  logs:     [],
+  ws:       null,
+  paused:   false,
+  filter:   'all',
+  lfilter:  'all',
+  online:   false,
+};
+
+// ═══════════════════════════════════════════════════════════════
+// WEBSOCKET
+// ═══════════════════════════════════════════════════════════════
+const DEFAULT_WS_PORT = 8765;
+const WS_PROTO = location.protocol === 'https:' ? 'wss' : 'ws';
+const WS_DEBUG_BOX_ID = 'ws-debug-box';
+const WS_HOST = location.hostname || '127.0.0.1';
+let wsReconnectTimer = null;
+let wsTriedTargets = [];
+
+function ensureWsDebugBox() {
+  let el = document.getElementById(WS_DEBUG_BOX_ID);
+  if (!el) {
+    el = document.createElement('div');
+    el.id = WS_DEBUG_BOX_ID;
+    el.style.position = 'fixed';
+    el.style.right = '10px';
+    el.style.bottom = '10px';
+    el.style.zIndex = '99999';
+    el.style.padding = '8px 10px';
+    el.style.borderRadius = '10px';
+    el.style.background = 'rgba(0,0,0,0.85)';
+    el.style.color = '#fff';
+    el.style.fontSize = '12px';
+    el.style.fontFamily = 'monospace';
+    el.style.maxWidth = '85vw';
+    el.style.wordBreak = 'break-word';
+    document.body.appendChild(el);
+  }
+  return el;
+}
+
+function setWsDebugStatus(text) {
+  const el = ensureWsDebugBox();
+  el.textContent = text;
+}
+
+async function getWsTargets() {
+  const ports = [];
+  try {
+    const res = await fetch('/monitor_config', { cache: 'no-store' });
+    if (res.ok) {
+      const cfg = await res.json();
+      if (cfg.ws_port) ports.push(cfg.ws_port);
+      if (Array.isArray(cfg.ws_port_candidates)) ports.push(...cfg.ws_port_candidates);
+    }
+  } catch (_) {}
+
+  ports.push(DEFAULT_WS_PORT);
+  for (let p = DEFAULT_WS_PORT; p < DEFAULT_WS_PORT + 10; p++) ports.push(p);
+
+  const uniquePorts = [...new Set(ports.filter(Boolean))];
+  return uniquePorts.map((port) => ({ host: WS_HOST, port }));
+}
+
+function scheduleReconnect() {
+  if (wsReconnectTimer) return;
+  wsReconnectTimer = setTimeout(() => {
+    wsReconnectTimer = null;
+    connect();
+  }, 3000);
+}
+
+async function connect() {
+  const targets = await getWsTargets();
+  wsTriedTargets = targets;
+
+  for (const target of targets) {
+    const url = `${WS_PROTO}://${target.host}:${target.port}`;
+    setWsDebugStatus(`WS connecting: ${url}`);
+
+    try {
+      const ws = new WebSocket(url);
+      const opened = await new Promise((resolve) => {
+        let settled = false;
+        const finish = (ok) => {
+          if (settled) return;
+          settled = true;
+          resolve(ok);
+        };
+        const timer = setTimeout(() => finish(false), 1500);
+        ws.addEventListener('open', () => {
+          clearTimeout(timer);
+          finish(true);
+        }, { once: true });
+        ws.addEventListener('error', () => {
+          clearTimeout(timer);
+          finish(false);
+        }, { once: true });
+        ws.addEventListener('close', () => {
+          clearTimeout(timer);
+          finish(false);
+        }, { once: true });
+      });
+
+      if (!opened) {
+        try { ws.close(); } catch (_) {}
+        continue;
+      }
+
+      state.ws = ws;
+      state.ws.onopen = () => {
+        setOnline(true);
+        addSysMsg(`Verbunden mit Isaac (${url}).`);
+        setWsDebugStatus(`WS open: ${url}`);
+      };
+      state.ws.onmessage = (e) => {
+        try { handle(JSON.parse(e.data)); } catch(ex) { console.error(ex); }
+      };
+      state.ws.onclose = (ev) => {
+        setOnline(false);
+        addSysMsg('Verbindung unterbrochen...');
+        setWsDebugStatus(`WS close: code=${ev.code} reason=${ev.reason || '-'} target=${url}`);
+        scheduleReconnect();
+      };
+      state.ws.onerror = () => {
+        setWsDebugStatus(`WS error: target=${url}`);
+        try { state.ws.close(); } catch (_) {}
+      };
+      return;
+    } catch (_) {
+      // probiere nächsten Port
+    }
+  }
+
+  if (!state.ws || state.ws.readyState !== WebSocket.OPEN) setOnline(false);
+  setWsDebugStatus(`WS failed: ${wsTriedTargets.map(t => `${t.host}:${t.port}`).join(', ')}`);
+  scheduleReconnect();
+}
+
+function send(data) {
+  if (state.ws && state.ws.readyState === 1) {
+    state.ws.send(JSON.stringify(data));
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// MESSAGE HANDLER
+// ═══════════════════════════════════════════════════════════════
+function handle(msg) {
+  switch(msg.typ) {
+
+    case 'init':
+      updateState(msg.state);
+      break;
+
+    case 'state':
+      updateState(msg.state);
+      break;
+
+    case 'tasks':
+      msg.tasks.forEach(t => { state.tasks[t.id] = t; });
+      renderTasks();
+      break;
+
+    case 'task_update':
+      const t = msg.task;
+      const isNew = !state.tasks[t.id];
+      state.tasks[t.id] = t;
+      updateTaskRow(t, isNew);
+      updateBadge('tab-running', Object.values(state.tasks)
+        .filter(x => ['running','evaluating','followup','queued'].includes(x.status)).length);
+      break;
+
+    case 'audit':
+      msg.entries.forEach(addLogEntry);
+      break;
+
+    case 'audit_event':
+      addLogEntry(msg.entry);
+      break;
+
+    case 'chat_response':
+      removeTyping();
+      addChatMsg('isaac', msg.text, msg.ts || now());
+      break;
+
+    case 'providers':
+      renderProviders(msg.providers);
+      break;
+
+    case 'directives':
+      renderDirectives(msg.directives);
+      break;
+
+    case 'system':
+      state.paused = msg.event === 'paused';
+      updatePauseBtn();
+      addSysMsg(msg.event === 'paused' ? '⏸ Isaac pausiert.' : '▶ Isaac fortgesetzt.');
+      break;
+
+    case 'ok':
+      addSysMsg(msg.msg);
+      break;
+
+    case 'fehler':
+      addSysMsg('⚠ ' + msg.msg);
+      break;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// STATE UPDATE
+// ═══════════════════════════════════════════════════════════════
+function updateState(s) {
+  if (!s) return;
+
+  if (s.executor) {
+    setText('m-total',   s.executor.total);
+    setText('m-running', s.executor.running);
+    setText('m-queue',   s.executor.queue);
+    const avg = s.executor.avg_score;
+    setTextColored('m-avgscore', avg ? avg.toFixed(1) : '–',
+                   avg >= 7 ? 'g' : avg >= 5 ? 'y' : 'r');
+  }
+
+  if (s.logic) {
+    setText('l-evaluated', s.logic.total_evaluated);
+    setText('l-followups', s.logic.followups_generated);
+    setText('l-switches',  s.logic.switches);
+    setText('l-decomps',   s.logic.decompositions);
+    if (s.logic.cfg) setText('l-minscore', s.logic.cfg.min_score);
+  }
+
+  if (s.memory) {
+    setText('mem-conv',    s.memory.conversations);
+    setText('mem-facts',   s.memory.facts);
+    setText('mem-tasks',   s.memory.task_results);
+    setText('mem-working', s.memory.working_memory);
+  }
+
+  if (s.audit) {
+    setText('a-total', s.audit.total_buffer);
+    setText('a-size',  s.audit.audit_file_kb + ' KB');
+  }
+
+  if (s.providers) renderProviders(s.providers);
+  if (s.directives) {
+    renderDirectives(s.directives);
+    updateBadge('tab-dir', s.directives.length);
+  }
+
+  if (s.paused !== undefined) {
+    state.paused = s.paused;
+    updatePauseBtn();
+  }
+
+  // Running tasks sofort aktualisieren
+  if (s.running) {
+    s.running.forEach(t => {
+      state.tasks[t.id] = t;
+      updateTaskRow(t, false);
+    });
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// TASK MANAGER
+// ═══════════════════════════════════════════════════════════════
+const STATUS_COLORS = {
+  running:    '#ffd166',
+  evaluating: '#bd93f9',
+  followup:   '#ff9500',
+  done:       '#00e5a0',
+  failed:     '#ff4060',
+  queued:     '#3a3a5a',
+  cancelled:  '#404060',
+};
+
+const TYPE_ICONS = {
+  chat: '💬', search: '🔍', code: '⌨',
+  translate: '🌐', analysis: '📊', plan: '🗺',
+  file: '📁', aggregate: '⚡'
+};
+
+function renderTasks() {
+  const container = document.getElementById('tm-container');
+  const tasks = Object.values(state.tasks)
+    .filter(t => state.filter === 'all' || t.status === state.filter)
+    .sort((a, b) => b.erstellt.localeCompare(a.erstellt))
+    .slice(0, 200);
+
+  setText('tm-count', tasks.length + ' Tasks');
+  container.innerHTML = '';
+  tasks.forEach(t => {
+    const el = buildTaskRow(t);
+    container.appendChild(el);
+  });
+}
+
+function updateTaskRow(task, isNew) {
+  const existing = document.getElementById('task-' + task.id);
+  const shouldShow = state.filter === 'all' || task.status === state.filter;
+
+  if (existing) {
+    if (!shouldShow) { existing.remove(); return; }
+    // Nur Status/Progress/Score aktualisieren
+    existing.className = 'task-row ' + task.status +
+                         (existing.classList.contains('expanded') ? ' expanded' : '');
+    if (isNew) existing.classList.add('flash-new');
+
+    const fill = existing.querySelector('.task-progress-fill');
+    if (fill) {
+      fill.style.width = (task.progress * 100) + '%';
+      fill.style.background = STATUS_COLORS[task.status] || '#3a3a5a';
+    }
+    const scoreEl = existing.querySelector('.task-score');
+    if (scoreEl && task.score !== null) {
+      scoreEl.textContent = task.score?.toFixed(1) ?? '–';
+      scoreEl.style.color = task.score >= 7 ? 'var(--green)' :
+                            task.score >= 5 ? 'var(--yellow)' : 'var(--red)';
+    }
+    const iterEl = existing.querySelector('.task-iter');
+    if (iterEl) iterEl.textContent = `#${task.iteration}`;
+
+    // Log aktualisieren
+    const logEl = existing.querySelector('.task-log');
+    if (logEl && task.log) {
+      logEl.innerHTML = task.log.map(e =>
+        `<div class="task-log-entry"><span class="tl-ts">${e.ts}</span>${e.msg}</div>`
+      ).join('');
+      logEl.scrollTop = logEl.scrollHeight;
+    }
+  } else if (shouldShow) {
+    const el = buildTaskRow(task);
+    if (isNew) el.classList.add('flash-new');
+    const container = document.getElementById('tm-container');
+    container.prepend(el);
+  }
+}
+
+function buildTaskRow(task) {
+  const row = document.createElement('div');
+  row.className = 'task-row ' + task.status;
+  row.id = 'task-' + task.id;
+
+  const icon  = TYPE_ICONS[task.typ] || '◈';
+  const color = STATUS_COLORS[task.status] || '#3a3a5a';
+  const score = task.score !== null ? task.score?.toFixed(1) : '–';
+  const scoreColor = task.score >= 7 ? 'var(--green)' :
+                     task.score >= 5 ? 'var(--yellow)' : 'var(--red)';
+
+  row.innerHTML = `
+    <div class="task-header" onclick="toggleTask('${task.id}')">
+      <span class="task-id">${task.id}</span>
+      <span class="task-type">${icon} ${task.typ}</span>
+      <span class="task-desc" title="${task.beschreibung}">${task.beschreibung}</span>
+      <span class="task-prov">${task.provider}</span>
+      <span class="task-iter">#${task.iteration}</span>
+      <span class="task-score" style="color:${scoreColor}">${score}</span>
+      <span class="task-dur">${task.dauer}s</span>
+    </div>
+    <div class="task-progress">
+      <div class="task-progress-fill" style="width:${task.progress*100}%;background:${color}"></div>
+    </div>
+    <div class="task-detail">
+      <div class="detail-grid">
+        ${buildScoreBars(task)}
+        <div class="detail-block">
+          <div class="detail-label">Antwort (Vorschau)</div>
+          <div class="detail-value">${task.antwort_kurz || task.fehler || '–'}</div>
+        </div>
+        <div class="detail-block">
+          <div class="detail-label">Sub-Tasks / Modus</div>
+          <div class="detail-value">${task.sub_tasks} Sub-Tasks | Followup: ${task.followup_mode || '–'}</div>
+        </div>
+        <div class="detail-block full">
+          <div class="detail-label">Live-Log</div>
+          <div class="task-log">${(task.log || []).map(e =>
+            `<div class="task-log-entry"><span class="tl-ts">${e.ts}</span>${e.msg}</div>`
+          ).join('')}</div>
+        </div>
+      </div>
+      <div style="margin-top:.4rem">
+        <button class="task-cancel-btn"
+          onclick="cancelTask('${task.id}')">✕ Abbrechen</button>
+        <span style="color:var(--text2);font-size:.62rem;margin-left:.5rem">
+          Erstellt: ${task.erstellt}
+          ${task.parent_id ? `│ Parent: ${task.parent_id}` : ''}
+        </span>
+      </div>
+    </div>
+  `;
+  return row;
+}
+
+function buildScoreBars(task) {
+  if (!task.score_detail) return `
+    <div class="detail-block">
+      <div class="detail-label">Score</div>
+      <div class="detail-value">–</div>
+    </div>`;
+
+  const s = task.score_detail;
+  const dims = [
+    ['Gesamt',     s.total,       '#00cfff'],
+    ['Länge',      s.length,      '#00e5a0'],
+    ['Abdeckung',  s.coverage,    '#bd93f9'],
+    ['Spezifität', s.specificity, '#ffd166'],
+    ['Kohärenz',   s.coherence,   '#ff9500'],
+  ];
+  const bars = dims.map(([lbl, val, col]) => `
+    <div class="score-bar-row">
+      <span class="score-bar-lbl">${lbl}</span>
+      <div class="score-bar-bg">
+        <div class="score-bar-fill" style="width:${val*10}%;background:${col}"></div>
+      </div>
+      <span class="score-bar-val">${val?.toFixed(1)}</span>
+    </div>`).join('');
+
+  return `<div class="detail-block">
+    <div class="detail-label">Quality Score (${task.score_detail.word_count} Wörter)</div>
+    <div class="score-bars">${bars}</div>
+    ${s.issues?.length ? `<div style="color:var(--red);font-size:.62rem;margin-top:.3rem">
+      ⚠ ${s.issues.join(' │ ')}</div>` : ''}
+  </div>`;
+}
+
+function toggleTask(id) {
+  const row = document.getElementById('task-' + id);
+  if (row) row.classList.toggle('expanded');
+}
+
+function cancelTask(id) {
+  send({typ: 'task_cancel', task_id: id});
+}
+
+// Filter
+function setFilter(f, btn) {
+  state.filter = f;
+  document.querySelectorAll('.tm-filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderTasks();
+}
+
+// ═══════════════════════════════════════════════════════════════
+// AUDIT LOG
+// ═══════════════════════════════════════════════════════════════
+let logCount = 0;
+
+function addLogEntry(e) {
+  if (!e) return;
+  state.logs.push(e);
+  if (state.logs.length > 1000) state.logs = state.logs.slice(-1000);
+  logCount++;
+  setText('tab-log', logCount);
+  setText('log-count-label', logCount + ' Einträge');
+
+  if (state.lfilter !== 'all' && e.typ !== state.lfilter) return;
+
+  const container = document.getElementById('log-container');
+  const row = document.createElement('div');
+  row.className = 'log-entry ' + (e.typ || '');
+
+  const caller = e.caller || e.task_id || '';
+  const msg = buildLogMsg(e);
+
+  row.innerHTML = `
+    <span class="log-ts">${e.ts?.slice(11,19) || '--:--:--'}</span>
+    <span class="log-typ">${e.typ || '?'}</span>
+    <span class="log-caller">${caller}</span>
+    <span class="log-msg">${msg}</span>
+  `;
+  container.appendChild(row);
+  if (container.scrollTop + container.clientHeight > container.scrollHeight - 60) {
+    container.scrollTop = container.scrollHeight;
+  }
+}
+
+function buildLogMsg(e) {
+  switch(e.typ) {
+    case 'task':     return `[${e.task_id}] ${e.status} – ${e.detail || ''}`;
+    case 'quality':  return `[${e.task_id}] Score: ${e.score?.toFixed(1)} │ ${e.action_taken} │ iter=${e.iteration}`;
+    case 'action':   return `${e.aktion}: ${e.detail || ''}`;
+    case 'error':    return `${e.fehler} ${e.detail || ''}`;
+    case 'steffen_input': return `"${e.text?.slice(0,100)}"`;
+    case 'isaac_output':  return `"${e.text?.slice(0,100)}"`;
+    case 'privilege': return `${e.aktion} → ${e.erlaubt ? '✓' : '✗'} (${e.grund || ''})`;
+    case 'memory':   return `${e.op}: ${e.typ2 || e.typ} → ${e.key}`;
+    default:         return JSON.stringify(e).slice(0, 150);
+  }
+}
+
+function setLogFilter(f, btn) {
+  state.lfilter = f;
+  document.querySelectorAll('.tm-filter-btn[data-lfilter]').forEach(b =>
+    b.classList.remove('active'));
+  btn.classList.add('active');
+  const container = document.getElementById('log-container');
+  container.innerHTML = '';
+  const filtered = f === 'all' ? state.logs :
+                   state.logs.filter(e => e.typ === f);
+  filtered.slice(-300).forEach(addLogEntry);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// PROVIDER
+// ═══════════════════════════════════════════════════════════════
+function renderProviders(providers) {
+  const grid = document.getElementById('providers-grid');
+  if (!providers || !grid) return;
+  grid.innerHTML = '';
+  providers.forEach(p => {
+    const card = document.createElement('div');
+    card.className = 'prov-card' +
+      (p.primary ? ' primary' : '') +
+      (!p.available ? ' unavail' : '');
+    card.innerHTML = `
+      <div class="prov-name">
+        ${p.available ? '✓' : '✗'} ${p.name}
+        ${p.primary ? '<span class="badge inf">PRIMÄR</span>' : ''}
+      </div>
+      <div class="prov-model">${p.model || '–'}</div>
+      <div class="prov-rate">${p.rate || '–'}</div>
+    `;
+    grid.appendChild(card);
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════
+// DIREKTIVEN
+// ═══════════════════════════════════════════════════════════════
+function renderDirectives(directives) {
+  const rows = document.getElementById('dir-rows');
+  const sidebar = document.getElementById('sidebar-directives');
+  if (!rows) return;
+
+  updateBadge('tab-dir', directives.length);
+
+  if (!directives.length) {
+    rows.innerHTML = '<em style="color:var(--text2)">Keine aktiven Direktiven</em>';
+    sidebar.innerHTML = '<em>Keine</em>';
+    return;
+  }
+
+  rows.innerHTML = directives.map(d => `
+    <div class="directive-row">
+      <span class="dir-priority">[${d.priority}]</span>
+      <span class="dir-text">${d.text}</span>
+      <span class="dir-id">${d.id}</span>
+      <button class="dir-revoke" onclick="revokeDirective('${d.id}')">✕</button>
+    </div>
+  `).join('');
+
+  sidebar.innerHTML = directives.slice(0, 4).map(d =>
+    `<div style="padding:.1rem 0;border-bottom:1px solid var(--border)">
+      <span style="color:var(--yellow)">[${d.priority}]</span> ${d.text.slice(0, 45)}
+    </div>`
+  ).join('');
+}
+
+function addDirective() {
+  const input = document.getElementById('dir-input');
+  const text = input.value.trim();
+  if (!text) return;
+  send({typ: 'directive_add', text, priority: 10});
+  input.value = '';
+}
+
+function revokeDirective(id) {
+  send({typ: 'directive_revoke', id});
+}
+
+// ═══════════════════════════════════════════════════════════════
+// CHAT
+// ═══════════════════════════════════════════════════════════════
+function sendChat() {
+  const inp = document.getElementById('chat-input');
+  const text = inp.value.trim();
+  if (!text || !state.online) return;
+  addChatMsg('steffen', text, now());
+  send({typ: 'chat', text});
+  inp.value = '';
+  // Typing indicator
+  addTyping();
+}
+
+function addChatMsg(who, text, ts) {
+  const el = document.createElement('div');
+  el.className = 'msg ' + who;
+  const label = who === 'steffen' ? '▶ ' + CONFIG.owner : '⚡ Isaac';
+  el.innerHTML = `<div class="who">${label}<span class="ts">${ts}</span></div><div>${escHtml(text)}</div>`;
+  const container = document.getElementById('chat-messages');
+  container.appendChild(el);
+  container.scrollTop = container.scrollHeight;
+}
+
+function addSysMsg(text) {
+  const el = document.createElement('div');
+  el.className = 'msg system';
+  el.textContent = text;
+  const container = document.getElementById('chat-messages');
+  container.appendChild(el);
+  container.scrollTop = container.scrollHeight;
+}
+
+let typingEl = null;
+function addTyping() {
+  removeTyping();
+  typingEl = document.createElement('div');
+  typingEl.className = 'msg isaac';
+  typingEl.id = 'typing-indicator';
+  typingEl.innerHTML = `<div class="who">⚡ Isaac</div>
+    <span class="typing-dots"><span>●</span><span>●</span><span>●</span></span>`;
+  const c = document.getElementById('chat-messages');
+  c.appendChild(typingEl);
+  c.scrollTop = c.scrollHeight;
+}
+function removeTyping() {
+  if (typingEl) { typingEl.remove(); typingEl = null; }
+}
+
+function sendCommand(cmd) {
+  const inp = document.getElementById('chat-input');
+  inp.value = cmd;
+  sendChat();
+}
+
+// ═══════════════════════════════════════════════════════════════
+// UI UTILS
+// ═══════════════════════════════════════════════════════════════
+const CONFIG = { owner: 'Steffen' };
+
+function showTab(name) {
+  document.querySelectorAll('.tab').forEach((t, i) => {
+    const names = ['taskmanager', 'log', 'providers', 'directives'];
+    t.classList.toggle('active', names[i] === name);
+  });
+  document.querySelectorAll('.tab-content').forEach(c => {
+    c.classList.toggle('active', c.id === 'tab-' + name);
+  });
+}
+
+function setOnline(online) {
+  state.online = online;
+  const dot = document.getElementById('conn-dot');
+  const lbl = document.getElementById('conn-label');
+  const inp = document.getElementById('chat-input');
+  const btn = document.getElementById('chat-send-btn');
+  const status = document.getElementById('chat-status');
+
+  dot.className = 'dot ' + (online ? 'on' : 'boot');
+  lbl.textContent = online ? 'Isaac online' : 'Verbinde...';
+  inp.disabled = !online;
+  btn.disabled = !online;
+  status.textContent = online ? 'online' : 'offline';
+  status.style.color = online ? 'var(--green)' : 'var(--dim)';
+}
+
+function togglePause() {
+  send({typ: state.paused ? 'resume' : 'pause'});
+}
+
+function updatePauseBtn() {
+  const btn = document.getElementById('pause-btn');
+  const sys = document.getElementById('sys-status');
+  if (state.paused) {
+    btn.textContent = '▶ Resume';
+    btn.classList.remove('danger');
+    sys.textContent = 'PAUSIERT';
+    sys.className = 'badge hot';
+  } else {
+    btn.textContent = 'Pause';
+    btn.classList.add('danger');
+    sys.textContent = 'ONLINE';
+    sys.className = 'badge on';
+  }
+}
+
+function setText(id, val) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = val ?? '–';
+}
+
+function setTextColored(id, val, cls) {
+  const el = document.getElementById(id);
+  if (el) {
+    el.textContent = val ?? '–';
+    el.className = 'mv ' + cls;
+  }
+}
+
+function updateBadge(id, val) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = val;
+}
+
+function escHtml(s) {
+  return String(s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/\n/g,'<br>');
+}
+
+function now() {
+  return new Date().toTimeString().slice(0,8);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════════════════════
+setInterval(() => {
+  document.getElementById('clock').textContent = now();
+}, 1000);
+
+// Keyboard shortcuts
+document.addEventListener('keydown', e => {
+  if (e.ctrlKey && e.key === 'Enter') {
+    sendChat();
+  }
+});
+
+// Enter in Direktiven-Input
+document.getElementById('dir-input')?.addEventListener('keydown', e => {
+  if (e.key === 'Enter') addDirective();
+});
+
+// WebSocket verbinden
+connect();
+
+</script>
+</body>
+</html>

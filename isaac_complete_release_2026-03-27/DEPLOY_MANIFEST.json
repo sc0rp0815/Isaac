@@ -1,0 +1,312 @@
+{
+  "package_name": "isaac_deploy_package_storage_start",
+  "start_dir": "/storage/emulated/0/Gpt-isaac/deploy/isaac_deploy_package",
+  "storage_base": "/storage/emulated/0/Gpt-isaac/deploy",
+  "file_count": 76,
+  "files": {
+    ".env.example": {
+      "size": 424,
+      "sha256": "21d60e3a85b82a6443bcbc68bcb5116cd7eea6451c760319203644b1e7dbdab2"
+    },
+    "INTEGRATION.txt": {
+      "size": 808,
+      "sha256": "0d48c7ebe1927ca4cc9def55706785fe792cd9e8f30e6c410de9b7af2b125999"
+    },
+    "PACKAGE_TEST_REPORT.txt": {
+      "size": 367,
+      "sha256": "5adc0d7df8e125387392c13bbec9b41113c735ac655e562a43f7059abd96cef4"
+    },
+    "README.md": {
+      "size": 2325,
+      "sha256": "0a2b4ca83086d8a73b62b5be4ff9baa4732033e176ac4734726f83fae65457ac"
+    },
+    "app_bridge.py": {
+      "size": 540,
+      "sha256": "c7e053f529d921a5a3c14b0092ae0c86d0dd5324d5bcf4c0854b59b76ba6d9fb"
+    },
+    "audit.py": {
+      "size": 7051,
+      "sha256": "cf01b7de71148208833d9fab6fd9c67ed3aedbc5ddfb518adb15cea3c00684b5"
+    },
+    "background_loop.py": {
+      "size": 14557,
+      "sha256": "f672baf0332c30120eaf48f770c6fcfb6fa8de271a3d5fada238a82c14501f4e"
+    },
+    "bootstrap_example.py": {
+      "size": 145,
+      "sha256": "cc03a2d77524d50f7bc36c1013ccd8d7ebc8d7b45b0352bb576e5b5ae643b99d"
+    },
+    "browser.py": {
+      "size": 22658,
+      "sha256": "80f2576e3485fc231c937c61adf3efb6c9a053dcbca1c22f563da4517f9b7801"
+    },
+    "browser_chat.py": {
+      "size": 2487,
+      "sha256": "26d05ca2d696c1afb1a0d16e1fddb923dad0735d1f05313530bbd7a09f5a0626"
+    },
+    "config.py": {
+      "size": 9932,
+      "sha256": "1dd4a75866ca67d8a43fa2aa5646d7d5c23d76ca92461f01b40cd1d0ae350f17"
+    },
+    "dashboard.html": {
+      "size": 45921,
+      "sha256": "0fcd092243ca8ea31af52c234d812ae3a4f1a43092ca68ab6200f5d62096b44e"
+    },
+    "dashboard_api.py": {
+      "size": 2642,
+      "sha256": "f01f5c63ecb3c27c80d0a5f16c98843caa35c2826bdd144ef354a74665d81602"
+    },
+    "dashboard_home_mobile.html": {
+      "size": 110,
+      "sha256": "b431956a6e9841d6fe7f409cb7e385c3e09dce391ae8adfd0af195274743f1ed"
+    },
+    "dashboard_live.html": {
+      "size": 108,
+      "sha256": "62b9465f2cc7e534312e45d6e419716d2a86a741ed7b07fd02bc648982ca3fa0"
+    },
+    "dashboard_tools.html": {
+      "size": 11890,
+      "sha256": "c4c4e2af9304dc2518ecf581f1a4e7a09e0afdbea333b911f71f471c2886685e"
+    },
+    "dateiliste.txt": {
+      "size": 2667,
+      "sha256": "9c7eb461e914363a450b202f102957dfe51773a7282a0f4d7a8ea8a6cde99441"
+    },
+    "decomposer.py": {
+      "size": 18091,
+      "sha256": "2e32f3a15b0a7d56b5701999eb02de25271564f5b7ae6bd31a760ba80667ab51"
+    },
+    "decomposer_adaptive.py": {
+      "size": 54,
+      "sha256": "4352e89827e59b9c52b90af8a69cc99caf51e1348b687b7b9bd9bdd59ef67377"
+    },
+    "dispatcher.py": {
+      "size": 17953,
+      "sha256": "eccabeb11141045d39193532c8fa95f44b2d668105f68f4452421750f617d5df"
+    },
+    "empathie.py": {
+      "size": 14372,
+      "sha256": "c62ba191886be46101bec7005c1e875a1ed27563907f9b1d6a86ced2072a2e4b"
+    },
+    "executor.py": {
+      "size": 26522,
+      "sha256": "f5a93a21600365e6bbe186c814c828ee3d78c509160790ce6e7e8eb20bb547d1"
+    },
+    "install.sh": {
+      "size": 340,
+      "sha256": "23a3449d0612c0f8dbf1a39ee9d5985bdabae4557ec348c8d4d48154afd755c8"
+    },
+    "installer_dashboard.html": {
+      "size": 5859,
+      "sha256": "b5987ea4233ff549d0158f50701cc6e57d9a726c946cc0da7cbf9b93900f077f"
+    },
+    "integration_example.py": {
+      "size": 297,
+      "sha256": "ed54e00018f47f59c9b10399c6d31ee580d2615a0b9f6a289df5ec2bf96e56cd"
+    },
+    "isaac_core.py": {
+      "size": 27591,
+      "sha256": "c54d956e02a94cea39d5f72082c60005395d34fb304bee4f27acddd6813b24d4"
+    },
+    "isaac_core_orchestrator.py": {
+      "size": 54,
+      "sha256": "0681f7760a5e642e56ea38315e7e56ec80098f535a218f4b5412ee86b2d3d5cd"
+    },
+    "isaac_merged_final.py": {
+      "size": 54,
+      "sha256": "0681f7760a5e642e56ea38315e7e56ec80098f535a218f4b5412ee86b2d3d5cd"
+    },
+    "ki_dialog.py": {
+      "size": 22018,
+      "sha256": "7edee2b923f9c163cd13163328b9ef915e575bc18ae4aaf2ad153f328b3951ca"
+    },
+    "ki_skills.py": {
+      "size": 12729,
+      "sha256": "95cacb4723a6826be027e8d42930a5c136ba02788823cd54c3c94aff1b417843"
+    },
+    "learning_engine.py": {
+      "size": 997,
+      "sha256": "f395d93c0714f089e0a3edaa6a1da325d0dc5bd0b08de40301aaf75cdb56dcf3"
+    },
+    "logic.py": {
+      "size": 18769,
+      "sha256": "f8a876459f614f979e1dc2613d12decfea4deb6d7167e44efefe5e2ed36285de"
+    },
+    "memory.py": {
+      "size": 14512,
+      "sha256": "bd08d2ed11ce8ffbaa7958fc4f4eade02bc77167ad70aeb954a133eebfe0f67a"
+    },
+    "monitor_api.py": {
+      "size": 668,
+      "sha256": "72f4fe54b1695d7d648eb4568da9122d18107618a93d492764599d5436a45049"
+    },
+    "monitor_server.py": {
+      "size": 13650,
+      "sha256": "678762a02f759b699158d1a05927dc9b1339040f5822b02fd3131205aa215e9b"
+    },
+    "privilege.py": {
+      "size": 11171,
+      "sha256": "e8ba9f49fbfa3e9f4fecedaf2a57e08c5c1320ecd03f7c9dba1470637ec74cce"
+    },
+    "regelwerk.json": {
+      "size": 2275,
+      "sha256": "6d2cf9f44711ccd29af5a07e47c200cf92cd7b566d247cc5d8636ff06c095f1e"
+    },
+    "regelwerk.py": {
+      "size": 19906,
+      "sha256": "221d4d242bbf8ee9fd1b013ae6f6d2e54aed07e3fe517c605d2bd69d747ecf69"
+    },
+    "relay.py": {
+      "size": 17045,
+      "sha256": "8268496399bbe7cb622a9271b098d2ccf6e70b7a2963a1801df7feb3462b20f1"
+    },
+    "requirements.txt": {
+      "size": 299,
+      "sha256": "85ffbc759b2eb86c3f6790301dc314e36b0445e93ec3dcaa5d48647f8f327871"
+    },
+    "runtime_readme.txt": {
+      "size": 1025,
+      "sha256": "db45a112640d0762f5c22ff1b7aa7c4270bc944a7181e9f5139bd9efd8ec4618"
+    },
+    "search.py": {
+      "size": 23815,
+      "sha256": "24c7a4c6267282fcc567cfee9ccd16764862580b316a47e3f667102b39f6b283"
+    },
+    "secrets_store.py": {
+      "size": 1028,
+      "sha256": "ef35b845f23b800e9963e9c17a43deecdc2bde3a1a04996ea5dd0986c11b64fa"
+    },
+    "start_isaac.sh": {
+      "size": 178,
+      "sha256": "0734550bbbc824b041746625e31fdc82eaa1b9366f478f66f058cc4db65b2617"
+    },
+    "sudo_gate.py": {
+      "size": 9729,
+      "sha256": "9d6aff93b27a36d677b59aba0ca2ad9dd4adb4c5b59988ed2fc2d34bb06224d0"
+    },
+    "tool_registry.py": {
+      "size": 5097,
+      "sha256": "b94605195818376eed31d30cc1429850b041b0242c96206b7418e48855e4e702"
+    },
+    "tool_runtime.py": {
+      "size": 3759,
+      "sha256": "95d949b981c0b11e306571c7d3137e8a494583eb98066438690580d52883cff6"
+    },
+    "tools_patch_README.txt": {
+      "size": 761,
+      "sha256": "8312d44cd388b5cf7f3ac4a1deeecc03b0cf6ab2075bc866a2fa2eadc64675e4"
+    },
+    "trust_engine.py": {
+      "size": 854,
+      "sha256": "db45d9400eee2f2f8c3028047aa1ef0102c5010ff0cd5b141cb0cdf378438dbd"
+    },
+    "vector_memory.py": {
+      "size": 10307,
+      "sha256": "072605dbdef34001f005e8bbe6cd060088c9df8b97c8e340d289df7568bc6c0b"
+    },
+    "watchdog.py": {
+      "size": 12137,
+      "sha256": "a081d4a018115b218e3a6525043f92a6624ce633cd7c179a6b83a7f182575341"
+    },
+    "web_urldispatcher.py": {
+      "size": 44290,
+      "sha256": "24cf9396b88a08d6d32cd2f8dd16bdb1d674cc287166620461033a6696f28c8e"
+    },
+    "README.txt": {
+      "size": 761,
+      "sha256": "8312d44cd388b5cf7f3ac4a1deeecc03b0cf6ab2075bc866a2fa2eadc64675e4"
+    },
+    "install_isaac_package.sh": {
+      "size": 2802,
+      "sha256": "d7a98619d68b88d46e4faaadd74267dec76cb043474d6a05e14e64899af54b88"
+    },
+    "QUICKSTART.txt": {
+      "size": 2058,
+      "sha256": "04d90136812203442c5924d8784d645fcef8c4547355ffb068fdc215f067d3a6"
+    },
+    "MERGE_REPORT.txt": {
+      "size": 911,
+      "sha256": "8d16cea6b3d623278dd88a5042efba2cf82bddba53cdbe3100332cde0eda1a29"
+    },
+    "MERGE_MANIFEST.json": {
+      "size": 7720,
+      "sha256": "00478325f15e8114a6d66658c821bed4dcf6c65d60a6d956b43588903e40b58d"
+    },
+    "COMPILE_CHECK.txt": {
+      "size": 693,
+      "sha256": "a9479bf93201a78d57e64d342d3e62e0203620e8e1e4b5a9dc4dd3c00d3889a1"
+    },
+    "MASTER_START_HERE.txt": {
+      "size": 1108,
+      "sha256": "601ceb1aaf5115c23293fd4b2974bf8e4079bbb4e397daacaf7685b14f184cf4"
+    },
+    "MODULE_MAP.txt": {
+      "size": 4656,
+      "sha256": "65222daf4c3d31431f2ba6f9a5a18d7b192309a3f49caefcbeb236f6049e8ff7"
+    },
+    "INSTALL_ORDER.txt": {
+      "size": 811,
+      "sha256": "4dd08f6f8fdf9fda7b3fc95fc18e4ee9190474a80aaab20a209db6d09f9cfdc4"
+    },
+    "README_MASTER.md": {
+      "size": 764,
+      "sha256": "c3b9245fac29dfb45d66fa0fb2b990c24a25b70cecd7b1b8d5ca16d2e4f61947"
+    },
+    "MASTER_MANIFEST.json": {
+      "size": 1730,
+      "sha256": "eb82e0da87cf8a090ba21ee2a24cf8e3f48db875756fce9ea973766da08b789a"
+    },
+    "MASTER_VALIDATION.txt": {
+      "size": 730,
+      "sha256": "59075016b40dfe693e5c92d3b42b3543865041a25b57872b420cc63606d7cae5"
+    },
+    "RUNTIME_CLASSIFICATION.txt": {
+      "size": 1261,
+      "sha256": "596cfcaf27a56f196966a909ae5edda3452e006aa79163e7f343833427ea80d4"
+    },
+    "start_termux.sh": {
+      "size": 557,
+      "sha256": "675edac586602abb088d5768be3d4f9cbe1636ceb5027eb93e8c2338385a94bc"
+    },
+    "start_alpine.sh": {
+      "size": 430,
+      "sha256": "2ed2b39a148843d3a3d65324c3a02081dec8bf54acf644b42758cfa2ca8d80bb"
+    },
+    "run_isaac.sh": {
+      "size": 298,
+      "sha256": "7cd204313aea568d6f4c7468a42604913ca2cd6a5f39eeaabb4cd054c8266a05"
+    },
+    "install_termux.sh": {
+      "size": 902,
+      "sha256": "efb0f0510100d025c5f56b1dba860e07e009c072955c2ff5dc8e1391806bff24"
+    },
+    "install_alpine.sh": {
+      "size": 955,
+      "sha256": "0e17b26604df4f335d74b336f1211e11392b47183ad8757891ebb8aee339d17b"
+    },
+    "sanity_check.py": {
+      "size": 1455,
+      "sha256": "92a2eb7b2bf9e420af102d142dc171c32d35d2a3a533708a24ebd9f6e86be397"
+    },
+    "README_DEPLOY.md": {
+      "size": 901,
+      "sha256": "dbc4ccba48d2d9d58a29879d97cd9d0803d64146135fe3fff9876b1e175ea563"
+    },
+    "DEPLOY_MANIFEST.json": {
+      "size": 1495,
+      "sha256": "330c6d1ebc6a4e0ab0e4f76bd7891bdb9793b3bb05e1bf862adeaa98435eb42c"
+    },
+    "DEPLOY_RUNTIME_AUDIT.txt": {
+      "size": 3376,
+      "sha256": "6fcbaf8a160d02dff502920da01b938ad95d658a249de9c86563f9ee7b70879e"
+    },
+    "DEPLOY_RUNTIME_AUDIT.md": {
+      "size": 2402,
+      "sha256": "b8aa6c69a9a1d24cab634dd40735f0a9b6d5b03cb3e76e11ff25ba1a470ad9cc"
+    },
+    "START_FOLDER_NOTE.txt": {
+      "size": 802,
+      "sha256": "723ec0f5e90d287cb305ec8b0d71efbca34dd7b8c9be04ccab055d4f6ee99748"
+    }
+  }
+}

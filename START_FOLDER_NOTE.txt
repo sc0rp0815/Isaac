@@ -1,0 +1,23 @@
+ISAAC DEPLOY PATH NOTE
+======================
+
+Kanonischer Startordner für diesen Build:
+  /root/Isaac/isaac
+
+Paket-Ablageordner laut Screenshot:
+  /storage/emulated/0/Gpt-isaac/deploy
+
+Empfohlener Ablauf:
+1. ZIP in /storage/emulated/0/Gpt-isaac/deploy ablegen
+2. Dort entpacken, sodass das Projekt unter
+     /root/Isaac/isaac
+   liegt
+3. In Termux einmal `termux-setup-storage` ausführen
+4. Danach starten mit:
+     cd "/root/Isaac/isaac" && bash run_isaac.sh
+
+Optional:
+- Installer verwenden:
+     bash "/root/Isaac/isaac/install_termux.sh"
+- Alpine:
+     sh "/root/Isaac/isaac/install_alpine.sh"

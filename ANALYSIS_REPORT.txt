@@ -1,0 +1,30 @@
+Isaac Patch Report
+==================
+
+Basis: isaac_complete_integrated_package_v7.zip
+Zusatzquellen: isaac_dashboard_tools_patch.zip, isaac_hybrid_runtime_bundle.zip, isaac_install_helper.zip
+
+Integrierte neue Module:
+- instincts.py
+- values.py
+- meaning.py
+- value_decisions.py
+- reflection.py
+
+Geänderte Kernmodule:
+- relay.py: OpenRouter-Handler + optionale Attribution-Header + Connector limit_per_host
+- isaac_core.py: ValueDecisions im System-Prompt, Meaning/Values-Feedback nach Task-Score, Dashboard-Port aus Config
+- background_loop.py: periodische Wertentscheidungen + Instinct-Update im Health-Check
+- requirements.txt: Flask ergänzt
+- .env.example: OPENROUTER_HTTP_REFERER und OPENROUTER_APP_TITLE ergänzt
+- start_isaac.sh: Standardpfad auf /storage/emulated/0/Gpt-isaac/deploy/isaac_runtime gesetzt
+- install_isaac_package.sh: auf neues Paket + neue Module erweitert
+- install_or_patch_isaac.sh: neuer Installer/Patcher
+
+Validierung:
+- compileall: erfolgreich
+- Kernimporte inkl. neuer Module: erfolgreich
+
+Hinweis:
+- Browser-/Vector-Module benötigen weiterhin externe Pakete (playwright, chromadb) zur echten Laufzeit.
+- OpenRouter ist jetzt im Relay verdrahtet; echte API-Nutzung erfordert OPENROUTER_API_KEY und ACTIVE_PROVIDER=openrouter in .env.
