@@ -1,0 +1,47 @@
+ISAAC Phase 1 Unified Package — 2026-03-30
+==========================================
+
+Built as a best-effort stability package for Phase 1.
+
+Base decision
+-------------
+This package is based on:
+- isaac_project_full_20260328_003927.zip
+- plus the already-merged overlay from
+  isaac_combined_updates_after_project_full_20260330.zip
+
+Why this base was chosen
+------------------------
+The combined-updates package preserves the newer dashboard, updater tab,
+monitor/update API endpoints, tool autonomy/MCP additions, and later file
+revisions while still compiling cleanly on the key runtime modules.
+
+Important packages reviewed but NOT overlaid wholesale
+------------------------------------------------------
+- isaac_final_20260330.zip
+  Not used as overlay because its later files remove the updater UI/API and
+  reintroduce broken follow-up loop remnants in executor/dashboard paths.
+- isaac_latest_state_orchestrator_openrouter.zip
+  Older than the selected base on key runtime files.
+- isaac_cumulative_stability_fix.zip
+  Relevant files are already identical to the selected base.
+- isaac_model_override_fix.zip
+  Relevant relay.py is already identical to the selected base.
+
+Validation performed
+--------------------
+The following key modules were compile-checked from the selected base:
+- isaac_core.py
+- executor.py
+- monitor_server.py
+- memory.py
+- relay.py
+- logic.py
+- ki_dialog.py
+- background_loop.py
+
+Scope and limitation
+--------------------
+This is a curated package for Phase 1 stability, not a proof that every file in
+all later archives is safe to merge blindly. It intentionally prefers the last
+known coherent runtime surface over the newest timestamp alone.

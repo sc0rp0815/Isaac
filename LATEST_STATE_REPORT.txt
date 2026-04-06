@@ -1,0 +1,55 @@
+Isaac Latest-State Build Report
+================================
+
+Ziel: dateibasierter Latest-State-Build ohne Verlust von v7-Modulen/Funktionen.
+
+v7-Dateien (ohne __pycache__): 52
+Neue Paketdateien (ohne __pycache__): 91
+Fehlende v7-Dateien im neuen Paket: 0
+Zusätzliche Dateien gegenüber v7: 39
+
+Quellpriorität: v7 -> Dashboard/Hybrid/Helper -> final_package (Code) + deploy_package (Deploy-Skripte) -> gezielte Latest-State-Patches
+
+Fehlende v7-Dateien:
+- keine
+
+Zusätzliche Dateien gegenüber v7:
+- ANALYSIS_REPORT.txt
+- COMPILE_CHECK.txt
+- DEPLOY_GUIDE_TERMUX_ALPINE.txt
+- DEPLOY_MANIFEST.json
+- DEPLOY_RUNTIME_AUDIT.md
+- DEPLOY_RUNTIME_AUDIT.txt
+- INSTALL_ORDER.txt
+- LATEST_STATE_COMPILE_CHECK.txt
+- LATEST_STATE_MANIFEST.json
+- LATEST_STATE_REPORT.txt
+- MASTER_MANIFEST.json
+- MASTER_START_HERE.txt
+- MASTER_VALIDATION.txt
+- MERGE_MANIFEST.json
+- MERGE_REPORT.txt
+- MODULE_MAP.txt
+- PACKAGE_MANIFEST.json
+- QUICKSTART.txt
+- README.txt
+- README_DEPLOY.md
+- README_EXTENSIONS.txt
+- README_MASTER.md
+- RUNTIME_CLASSIFICATION.txt
+- START_FOLDER_AUDIT.txt
+- START_FOLDER_NOTE.txt
+- install_alpine.sh
+- install_isaac_package.sh
+- install_or_patch_isaac.sh
+- install_or_patch_latest_state.sh
+- install_termux.sh
+- instincts.py
+- meaning.py
+- reflection.py
+- run_isaac.sh
+- sanity_check.py
+- start_alpine.sh
+- start_termux.sh
+- value_decisions.py
+- values.py
