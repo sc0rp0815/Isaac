@@ -1,0 +1,31 @@
+Isaac merged latest package
+Basis: isaac_v7
+Overlays: root source files, then supplemental files from dashboard/hybrid/helper ZIPs when missing.
+
+Summary:
+- cleanup: removed_nonproject = 1
+- dashboard_tools_patch: add_missing = 1
+- dashboard_tools_patch: skip_existing = 5
+- hybrid_runtime_bundle: skip_existing = 7
+- install_helper: add_missing = 2
+- isaac_v7: base = 52
+- root_sources: add = 1
+- root_sources: override = 9
+- root_sources: same = 6
+
+Root overrides/additions:
+- Gespräch .txt (add)
+- requirements.txt (override)
+- config.py (override)
+- monitor_server.py (override)
+- dashboard.html (override)
+- relay.py (override)
+- decomposer.py (override)
+- dispatcher.py (override)
+- background_loop.py (override)
+- executor.py (override)
+
+Supplemental additions from extra ZIPs:
+- README.txt from dashboard_tools_patch
+- install_isaac_package.sh from install_helper
+- QUICKSTART.txt from install_helper

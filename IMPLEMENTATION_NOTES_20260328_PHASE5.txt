@@ -1,0 +1,59 @@
+Isaac – Phase 5: Persistente Tool-Strategie + MCP-Bridge + Next-Input
+=====================================================================
+
+Umgesetzt:
+- task_tool_state.py
+  - persistenter TaskToolStateStore (data/task_tool_states.json)
+  - Tool-Historie pro Task
+  - persistente used_tool_ids
+  - next_inputs Queue pro Task
+  - Resume-Zähler
+  - Strategieableitung aus Prompt
+
+- mcp_client.py
+  - async MCP-HTTP-Client via aiohttp
+  - unterstützt capabilities, tools, resources, prompts
+  - invoke_tool/read_resource/get_prompt
+
+- mcp_registry.py
+  - erweitert um prompts
+  - Default-MCP-Features registriert:
+    - Tools: isaac.task_status, isaac.audit_recent
+    - Resources: isaac://tasks/recent, isaac://tools/registry
+    - Prompts: tool.refine_input, research.next_step
+
+- mcp_server.py
+  - erweitert um MCP-Prompt-Endpunkte
+
+- tool_runtime.py
+  - Live-Discovery für Registry + MCP
+  - Tool-Auswahl jetzt registry + MCP-local/remote
+  - MCP-Bridge-Integration
+  - run_selected_tool() eingeführt
+  - Live-Interfaces inklusive MCP-Endpunkte abrufbar
+
+- executor.py
+  - Task hat jetzt tool_strategy
+  - persistente Tool-Strategie wird beim Start geladen/fortgeführt
+  - Tool-Auswahl basiert auf TaskToolState
+  - Tool-Ergebnis kann nächsten Input generieren
+  - Tool-Strategie überlebt weitere Iterationen und Watchdog-/Resume-Pfade
+
+- monitor_server.py
+  - /api/tools/live nutzt jetzt echte Live-Discovery
+  - /api/monitor/state enthält task_tool_states
+  - neue MCP-Endpunkte unter /api/mcp/*
+
+- tool_catalog.py
+  - MCP Bridge als echter kind="mcp"
+  - Basis-URL auf lokales Dashboard-/MCP-API angepasst
+
+Geprüft:
+- compileall erfolgreich für geänderte Dateien
+- Import-Smoke-Test erfolgreich
+- Smoke-Test für MCP-local Tool-Auswahl erfolgreich
+- Smoke-Test für Next-Input-Generierung erfolgreich
+
+Hinweise:
+- Remote-MCP wird genutzt, wenn MCP_BRIDGE_URL erreichbar ist.
+- Wenn keine Remote-Bridge läuft, fällt Isaac auf die lokale MCP-Registry zurück.
