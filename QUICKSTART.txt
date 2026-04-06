@@ -1,0 +1,65 @@
+Isaac v7 – Einbauanleitung mit möglichst wenig Befehlen
+
+Was ich bereits intern geprüft habe:
+- Paketstruktur geprüft
+- compileall über das Gesamtpaket
+- Import-Smoke-Tests für Kernmodule und Integrationsmodule
+
+Was ich hier NICHT gegen echte Live-Systeme testen konnte:
+- deine realen API-Keys
+- deine Browser-Logins
+- dein reales Ollama/Playwright/Android-Termux-Setup
+- echte Webseiten-Selektoren für Browser-Chat
+Dafür fehlen mir in dieser Umgebung Zugriff und Anmeldedaten.
+
+Empfohlene Installation – 1 Befehl
+----------------------------------
+bash /mnt/data/isaac_install_helper/install_isaac_package.sh ~/Isaac/isaac
+
+Was der Installer automatisch macht:
+- Backup des Zielordners
+- Paket entpacken
+- Dateien ins Projekt kopieren
+- bestehende .env schützen
+- bei Bedarf .env.example -> .env kopieren
+- requirements installieren
+- Syntax-/Import-Smoke-Test ausführen
+
+Nach der Installation
+---------------------
+1. .env prüfen
+   Besonders:
+   - OPENROUTER_API_KEY
+   - OPENROUTER_MODEL
+   - OLLAMA_MODEL
+   - OLLAMA_HOST
+   - Browser-/Tool-Parameter
+
+2. Starten
+   cd ~/Isaac/isaac && python3 isaac_core.py
+   oder
+   cd ~/Isaac/isaac && bash start_isaac.sh
+
+3. Dashboard öffnen
+   Standardmäßig:
+   - http://localhost:8766
+   - WebSocket: ws://localhost:8765
+
+4. Browser-Chat einrichten
+   Für browser_chat-Tools müssen pro Website die DOM-Selektoren hinterlegt werden:
+   - input_selector
+   - submit_selector
+   - answer_selector
+
+5. Live-E2E-Test lokal durchführen
+   Nach Installation kannst du real testen:
+   - OpenRouter/API-Tool im Dashboard anlegen
+   - Browser-Chat-Tool anlegen
+   - Wetter-/Such-API anlegen
+   - im Dashboard schauen, welcher Pfad gewählt wird
+
+Wenn der Start fehlschlägt
+--------------------------
+- Backup liegt neben deinem Zielordner
+- import_smoke_ok=False im Installer-Ausgang beachten
+- PACKAGE_TEST_REPORT.txt im Projektordner lesen

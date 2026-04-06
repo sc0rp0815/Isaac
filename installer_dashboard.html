@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Isaac – API/Tool Installer</title>
+<style>
+:root{--bg:#0f1115;--panel:#171a21;--line:#2a3040;--text:#edf1f7;--muted:#8d96a8;--accent:#67a3ff}
+body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,sans-serif}
+.wrap{max-width:920px;margin:0 auto;padding:16px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:14px;margin-bottom:14px}
+.steps{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+.step{padding:8px 12px;border:1px solid var(--line);border-radius:999px;color:var(--muted)}
+.step.active{background:var(--accent);color:#08111f;border-color:transparent}
+input,select,textarea{width:100%;padding:10px 12px;border-radius:12px;border:1px solid #31384a;background:#10141d;color:var(--text)}
+label{display:grid;gap:6px;margin-bottom:10px;color:var(--muted);font-size:13px}
+button{padding:10px 12px;border-radius:12px;border:1px solid #35405a;background:#212736;color:var(--text);cursor:pointer}
+button.primary{background:var(--accent);color:#08111f;border-color:transparent}
+.row{display:flex;gap:8px;flex-wrap:wrap}
+.hidden{display:none}
+pre{background:#0d1016;padding:12px;border:1px solid var(--line);border-radius:12px;white-space:pre-wrap}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="card">
+    <h2>Isaac – Neue API / neues Tool installieren</h2>
+    <div class="steps">
+      <div class="step active" id="s1">1 Typ</div>
+      <div class="step" id="s2">2 Name</div>
+      <div class="step" id="s3">3 Auth</div>
+      <div class="step" id="s4">4 URL</div>
+      <div class="step" id="s5">5 Zweck</div>
+      <div class="step" id="s6">6 Fertig</div>
+    </div>
+
+    <div id="step1">
+      <label>Typ
+        <select id="kind">
+          <option value="api">API</option>
+          <option value="search">Suchmaschine</option>
+          <option value="browser_chat">Browser-Chat</option>
+          <option value="web_tool">Web-Tool</option>
+          <option value="script">Lokales Skript</option>
+        </select>
+      </label>
+    </div>
+
+    <div id="step2" class="hidden">
+      <label>Name <input id="name" placeholder="z. B. OpenRouter, Claude Webchat, SearxNG" /></label>
+      <label>Beschreibung <textarea id="description" placeholder="Kurzbeschreibung"></textarea></label>
+    </div>
+
+    <div id="step3" class="hidden">
+      <label>Authentifizierung
+        <select id="auth_type">
+          <option value="none">Keine</option>
+          <option value="header">Header</option>
+          <option value="query">Query</option>
+        </select>
+      </label>
+      <label>Auth-Feld <input id="auth_field" placeholder="Authorization / api_key" /></label>
+      <label>Prefix <input id="auth_prefix" placeholder="Bearer " /></label>
+      <label>API-Key <input id="api_key" type="password" placeholder="optional" /></label>
+    </div>
+
+    <div id="step4" class="hidden">
+      <label>Base URL / Website / Scriptpfad <input id="base_url" placeholder="https://..." /></label>
+      <label>Endpoint / optionaler Pfad <input id="endpoint" placeholder="/v1/chat/completions" /></label>
+    </div>
+
+    <div id="step5" class="hidden">
+      <label>Kategorie
+        <select id="category">
+          <option value="general">Allgemein</option>
+          <option value="wetter">Wetter</option>
+          <option value="suche">Suche</option>
+          <option value="code">Code</option>
+          <option value="recherche">Recherche</option>
+        </select>
+      </label>
+      <label>Priorität <input id="priority" type="number" value="50" /></label>
+    </div>
+
+    <div id="step6" class="hidden">
+      <p>Fertig. Klicke auf <b>Speichern</b>.</p>
+      <pre id="preview"></pre>
+    </div>
+
+    <div class="row">
+      <button onclick="prevStep()">Zurück</button>
+      <button class="primary" id="nextBtn" onclick="nextStep()">Weiter</button>
+      <button class="primary hidden" id="saveBtn" onclick="saveTool()">Speichern</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Installierte Tools</h3>
+    <div id="tools"></div>
+  </div>
+</div>
+
+<script>
+let step = 1;
+function byId(id){ return document.getElementById(id); }
+function renderStep(){
+  for(let i=1;i<=6;i++){
+    byId('step'+i).classList.toggle('hidden', i!==step);
+    byId('s'+i).classList.toggle('active', i===step);
+  }
+  byId('nextBtn').classList.toggle('hidden', step===6);
+  byId('saveBtn').classList.toggle('hidden', step!==6);
+  if(step===6){
+    byId('preview').textContent = JSON.stringify(payload(), null, 2);
+  }
+}
+function nextStep(){ step = Math.min(6, step+1); renderStep(); }
+function prevStep(){ step = Math.max(1, step-1); renderStep(); }
+function payload(){
+  return {
+    kind: byId('kind').value,
+    name: byId('name').value,
+    description: byId('description').value,
+    auth_type: byId('auth_type').value,
+    auth_field: byId('auth_field').value,
+    auth_prefix: byId('auth_prefix').value,
+    api_key: byId('api_key').value,
+    base_url: byId('base_url').value,
+    endpoint: byId('endpoint').value,
+    category: byId('category').value,
+    priority: Number(byId('priority').value || 50)
+  };
+}
+async function saveTool(){
+  const res = await fetch('/api/tools/add', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify(payload())
+  });
+  const data = await res.json();
+  alert(data.ok ? 'Gespeichert' : ('Fehler: ' + (data.error || 'unbekannt')));
+  loadTools();
+}
+async function loadTools(){
+  const res = await fetch('/api/tools');
+  const data = await res.json();
+  byId('tools').innerHTML = (data.tools || []).map(t => `<div>${t.name} · ${t.kind} · ${t.category} · Trust ${t.trust}</div>`).join('') || 'Keine Tools';
+}
+renderStep(); loadTools();
+</script>
+</body>
+</html>

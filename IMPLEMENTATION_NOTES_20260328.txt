@@ -1,0 +1,29 @@
+ISAAC patch set 2026-03-28
+
+Umgesetzt:
+1. Dashboard: neues Tools-Tab mit
+   - Verfügbare Tools Live
+   - Verfügbare Tools Local
+   - Local installieren
+2. Audit-Log Bug gefixt:
+   - Klick auf Audit-Log zeigt nun Inhalt statt versehentlich den Counterwert.
+3. Tool-Autonomie im Executor:
+   - Isaac kann während eines laufenden Tasks ein passendes Tool auswählen,
+     nutzen und dessen Ergebnis als Kontext für den nächsten Fortschritt verwenden.
+   - Genutzte Tools werden im Task protokolliert.
+4. Leichtgewichtiger lokaler Tool-Katalog:
+   - DuckDuckGo Instant Search
+   - HTTP JSON Adapter
+   - Local Script Runner
+   - Browser Chat Bridge
+   - MCP Bridge
+5. Neue HTTP-Endpunkte:
+   - GET  /api/tools/catalog
+   - GET  /api/tools/live
+   - POST /api/tools/install_local
+6. Paket verschlankt:
+   - neues Slim-Deploy-ZIP ohne eingebettete Archive / Alt-Release-Bäume.
+
+Hinweise:
+- Secrets bleiben absichtlich vorerst einfach; Sicherheits-Härtung folgt später.
+- Größenangaben im lokalen Katalog sind Richtwerte.

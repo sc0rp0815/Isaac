@@ -1,0 +1,26 @@
+INSTALLATIONSREIHENFOLGE
+=======================
+
+TERMUX
+------
+1. Paket nach /root/Isaac/isaac entpacken
+2. Im Paketordner:
+     bash install_termux.sh /root/Isaac/isaac
+3. .env prüfen und Provider/API-Keys setzen
+4. Test:
+     cd /root/Isaac/isaac
+     python3 sanity_check.py
+5. Start:
+     sh run_isaac.sh
+
+ALPINE
+------
+1. Paket nach /root/Isaac/isaac entpacken
+2. Im Paketordner:
+     sh install_alpine.sh /root/Isaac/isaac
+3. .env prüfen und Provider/API-Keys setzen
+4. Test:
+     cd /root/Isaac/isaac
+     python3 sanity_check.py
+5. Start:
+     sh run_isaac.sh
