@@ -1,0 +1,66 @@
+{
+  "root": "/mnt/data/isaac_ultra_deploy_package_v5/package",
+  "python": "/opt/pyvenv/bin/python3",
+  "python_version": "3.13.5",
+  "required_files": {
+    "isaac_core.py": true,
+    "relay.py": true,
+    "monitor_server.py": true,
+    "requirements.txt": true,
+    "config.py": true,
+    "executor.py": true,
+    "memory.py": true,
+    "logic.py": true
+  },
+  "optional_files": {
+    ".env": false,
+    ".env.example": true,
+    "dashboard.html": true,
+    "dashboard_live.html": true,
+    "start_isaac.sh": true,
+    "run_isaac.sh": true,
+    "background_loop.py": true
+  },
+  "imports": {
+    "config": "ok",
+    "audit": "ok",
+    "memory": "ok",
+    "logic": "ok",
+    "privilege": "ok",
+    "sudo_gate": "ok",
+    "decomposer": "ok",
+    "dispatcher": "ok",
+    "search": "ok",
+    "regelwerk": "ok",
+    "empathie": "ok",
+    "watchdog": "ok",
+    "relay": "ok",
+    "executor": "ok",
+    "browser": "ok",
+    "ki_dialog": "ok",
+    "ki_skills": "ok",
+    "background_loop": "ok",
+    "monitor_server": "ok",
+    "tool_registry": "ok",
+    "secrets_store": "ok",
+    "tool_runtime": "ok",
+    "learning_engine": "ok",
+    "trust_engine": "ok",
+    "dashboard_api": "ok",
+    "isaac_core": "ok"
+  },
+  "optional_dependencies": {
+    "aiohttp": "installed",
+    "websockets": "installed",
+    "chromadb": "installed"
+  },
+  "local_ports": {
+    "8765": "closed",
+    "8766": "closed",
+    "8875": "closed"
+  },
+  "warnings": [
+    ".env fehlt; .env.example vorhanden"
+  ],
+  "status": "warning"
+}

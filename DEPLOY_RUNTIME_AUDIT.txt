@@ -1,0 +1,58 @@
+ISAAC DEPLOY RUNTIME AUDIT – Termux/Alpine
+
+Kanonischer Start: python3 isaac_core.py
+
+Einheitlicher Wrapper: sh run_isaac.sh
+
+
+KRITISCHE STARTFALLEN
+
+1. isaac_core.py: Dashboard-Port ist auf 8766 hart verdrahtet und ignoriert DASHBOARD_PORT aus .env.
+2. isaac_core.py: Banner zeigt WebSocket-Port 8765 hart verdrahtet an, auch wenn MONITOR_PORT anders gesetzt ist.
+3. .env.example bewirbt OpenRouter, aber config.py definiert keinen openrouter-Provider.
+4. browser.py importiert Playwright direkt, aber requirements.txt markiert playwright nur als optional/auskommentiert.
+5. vector_memory.py nutzt ChromaDB zur Laufzeit, aber requirements.txt markiert chromadb nur als optional/auskommentiert.
+6. web_urldispatcher.py ist im aktuellen Paket isoliert und verweist auf fehlende interne Module; nicht als Startmodul verwenden.
+7. tool_runtime.py verwendet requests synchron innerhalb async run_tool(); das kann den Event-Loop blockieren.
+8. monitor_server.py greift auf die interne Methode executor._notify() zu; das ist funktional, aber eng gekoppelt und fragil bei Refactors.
+
+
+MODULE MIT DRITTABHÄNGIGKEITEN
+
+- app_bridge.py: flask
+- browser.py: playwright
+- browser_chat.py: __future__, playwright
+- config.py: dotenv
+- dashboard_api.py: __future__, flask
+- integration_example.py: flask
+- learning_engine.py: __future__
+- monitor_api.py: __future__, flask
+- monitor_server.py: aiohttp, websockets
+- relay.py: aiohttp
+- search.py: aiohttp
+- secrets_store.py: __future__
+- tool_registry.py: __future__
+- tool_runtime.py: __future__, requests
+- trust_engine.py: __future__
+- vector_memory.py: chromadb
+- web_urldispatcher.py: helpers, typedefs, web_app, web_exceptions, web_fileresponse, web_request, web_response, web_routedef, yarl
+
+
+HARTE CHECKLISTE BEI STARTFEHLERN
+
+1. Im Zielordner zuerst: python3 sanity_check.py
+2. Wenn Flask fehlt: python3 -m pip install -r requirements.txt
+3. Wenn playwright fehlt: python3 -m pip install playwright && python3 -m playwright install chromium
+4. Wenn chromadb fehlt und Memory-Import scheitert: python3 -m pip install chromadb
+5. .env prüfen: ACTIVE_PROVIDER, OLLAMA_HOST, OLLAMA_MODEL, MONITOR_PORT, DASHBOARD_PORT, API-Keys.
+6. Bei ACTIVE_PROVIDER=ollama sicherstellen, dass Ollama wirklich läuft und das Modell existiert.
+7. Wenn Dashboard nicht erreichbar ist, prüfen ob localhost-Bindung im jeweiligen Umfeld erreichbar ist.
+8. Wenn Ports belegt sind, aktuell auch den Code prüfen, weil isaac_core.py das Dashboard auf 8766 fest setzt.
+9. web_urldispatcher.py nicht als produktive Komponente betrachten; im aktuellen Paket ist es ein Artefakt.
+10. Bei Browser-/Login-Fehlern prüfen: browser_creds.json, Playwright-Installation, Headless-Modus, Site-Selektoren.
+
+
+MODULEINSTUFUNG
+
+Kernmodule: config.py, audit.py, privilege.py, memory.py, vector_memory.py, logic.py, relay.py, executor.py, watchdog.py, decomposer.py, dispatcher.py, ki_dialog.py, ki_skills.py, search.py, sudo_gate.py, browser.py, background_loop.py, monitor_server.py, isaac_core.py
+Optionale/sekundäre Module: app_bridge.py, bootstrap_example.py, browser_chat.py, dashboard_api.py, decomposer_adaptive.py, empathie.py, integration_example.py, isaac_core_orchestrator.py, isaac_merged_final.py, learning_engine.py, monitor_api.py, regelwerk.py, sanity_check.py, secrets_store.py, tool_registry.py, tool_runtime.py, trust_engine.py, web_urldispatcher.py

@@ -1,0 +1,20 @@
+MASTER VALIDATION
+=================
+
+Pakettyp: deploy-fertiger Isaac-Stand
+Kanonischer Haupteinstieg: isaac_core.py
+
+Prüfungen:
+- __pycache__ entfernt
+- Python-Dateien kompiliert
+- Import-/Modulübersicht erstellt
+- separate Installer für Termux und Alpine erstellt
+- einheitlicher Start über run_isaac.sh erstellt
+- Sanity-Check-Skript hinzugefügt
+
+Drittanbieter-Importe erkannt:
+aiohttp, chromadb, dotenv, flask, helpers, playwright, requests, typedefs, web_app, web_exceptions, web_fileresponse, web_request, web_response, web_routedef, websockets, yarl
+
+Hinweis:
+Die Erkennung basiert auf statischer Importanalyse. Optional aktivierte Module
+wie Browser-/Playwright-Funktionen können weitere Laufzeitanforderungen haben.

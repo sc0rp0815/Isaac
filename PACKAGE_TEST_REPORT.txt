@@ -1,0 +1,5 @@
+compileall_ok=True
+smoke_imports:
+OK ['config', 'audit', 'privilege', 'empathie', 'regelwerk', 'logic', 'vector_memory', 'memory', 'relay', 'search', 'browser', 'decomposer', 'dispatcher', 'executor', 'monitor_server', 'ki_dialog', 'ki_skills', 'sudo_gate', 'watchdog', 'tool_registry', 'secrets_store', 'browser_chat', 'tool_runtime', 'learning_engine', 'trust_engine']
+FAIL []
+

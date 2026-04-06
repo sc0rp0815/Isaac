@@ -1,0 +1,9 @@
+ISAAC Repair Notes 2026-03-28
+
+Applied fixes:
+1. Changed stale Ollama default fallback from phi3:mini to phi3:latest in active config/example files.
+2. Patched dashboard.html so final WS-failed path only sets offline if no socket is actually open.
+3. Added __main__ startup block back to monitor_server.py and package/monitor_server.py.
+
+Known limitation:
+- ChromaDB remains optional; SQLite fallback is expected in Alpine/Android when chromadb cannot be built.
