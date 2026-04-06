@@ -1,0 +1,14 @@
+{
+  "package_name": "isaac_phase1_stable_unified_20260330.zip",
+  "build_basis": [
+    "isaac_project_full_20260328_003927.zip",
+    "isaac_combined_updates_after_project_full_20260330.zip"
+  ],
+  "reviewed_not_fully_applied": [
+    "isaac_final_20260330.zip",
+    "isaac_latest_state_orchestrator_openrouter.zip",
+    "isaac_cumulative_stability_fix.zip",
+    "isaac_model_override_fix.zip"
+  ],
+  "rationale": "Prefer coherent Phase-1-stable runtime with updater and monitor endpoints intact; exclude later regressions."
+}

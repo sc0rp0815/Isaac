@@ -1,0 +1,98 @@
+{
+  "release_name": "isaac_complete_release_2026-03-27",
+  "built_utc": "2026-03-27T21:28:45Z",
+  "primary_base": "isaac_current_full_backup.zip",
+  "includes_original_archives": true,
+  "fixes": [
+    "dashboard websocket syntax repair",
+    "dynamic monitor_config websocket discovery",
+    "port fallback 8765-8774"
+  ],
+  "source_archives": [
+    {
+      "file": "26.03.zip",
+      "sha256": "c3da86c201d576c966086d9bd368b3c68943655b1b45e6f565602eb29acffb89",
+      "size_bytes": 178333
+    },
+    {
+      "file": "isaac_complete_bundle_v1_v5.zip",
+      "sha256": "c6e033f22f9793d565f32a595917902b7d173d65d11157be1975e90eb7726062",
+      "size_bytes": 4822121
+    },
+    {
+      "file": "isaac_complete_integrated_package_v7.zip",
+      "sha256": "dbe8f2d57524dea95b5fc41fb6e972d3f76af8cc0b56644a846247ab080ebd45",
+      "size_bytes": 428170
+    },
+    {
+      "file": "isaac_cumulative_stability_fix.zip",
+      "sha256": "ffd3fa57dfc42e1f6a6a084e89022723af22afe51d48fc8324edd02d3d381fdc",
+      "size_bytes": 15231
+    },
+    {
+      "file": "isaac_current_full_backup.zip",
+      "sha256": "933b541b0fafe637e52d687180fa57647d952d22d73a186e54fe891602f2833c",
+      "size_bytes": 1752854
+    },
+    {
+      "file": "isaac_dashboard_tools_patch.zip",
+      "sha256": "6efd636d153f377690f144c95ae5298cae66db45a143177c2ead3d0e6d376a8c",
+      "size_bytes": 9300
+    },
+    {
+      "file": "isaac_deploy_backup.zip",
+      "sha256": "2d6bb4e3af2796d9d73df926ee02506b7eb1ccf5c72d51bcff9e42b43e44ae7b",
+      "size_bytes": 170222
+    },
+    {
+      "file": "isaac_hybrid_runtime_bundle.zip",
+      "sha256": "1a9511453230b28906e1d3328cd138dcc3628e0afb6442796d09e6e24cdb5a0c",
+      "size_bytes": 8640
+    },
+    {
+      "file": "isaac_install_helper.zip",
+      "sha256": "4aa27b1eab39a63e0f2a2f12485317bd1358ad0f3c3863fb4cc1da5f2385f695",
+      "size_bytes": 2511
+    },
+    {
+      "file": "isaac_latest_state_orchestrator_openrouter.zip",
+      "sha256": "76d4999fefa85e8208789d6b63bc89582f1736f5f126e5f6e508804fdd932de3",
+      "size_bytes": 491827
+    },
+    {
+      "file": "isaac_master_deploy_package_v5.zip",
+      "sha256": "0157d03ad5f5f85cfa7ebdfa6a582322fb5aaa18f1ff38bc6e516b44af2d6fea",
+      "size_bytes": 580635
+    },
+    {
+      "file": "isaac_model_override_fix.zip",
+      "sha256": "049de1130a16b6ff5974b432871d300f7ce09c0db000dd4445b3ae7d368ef0d7",
+      "size_bytes": 5884
+    },
+    {
+      "file": "isaac_ultra_deploy_package_v5.zip",
+      "sha256": "fcb980c559aa3a29fa813fcd64f4679d4671dd738f9072dba57ae269bee538ef",
+      "size_bytes": 591909
+    },
+    {
+      "file": "isaac_v1_foundation_patch_package.zip",
+      "sha256": "3d91c86258d1e8532d5365a70e9e3f8e5e0e121df5a84ac5445eb7d11dedadb2",
+      "size_bytes": 538120
+    },
+    {
+      "file": "isaac_v2_phase2_patch_package.zip",
+      "sha256": "6de25ac8f7ce8268b59abdf532921be611b3d60851c1b98bc4cdc421952ce058",
+      "size_bytes": 204833
+    },
+    {
+      "file": "isaac_v3_phase3_patch_package.zip",
+      "sha256": "9c67355d69d5a2f3dba07a03f2b3889172890d2efe4c0f66effecbd645eaa3cc",
+      "size_bytes": 451945
+    },
+    {
+      "file": "isaac_v4_phase4_patch_package.zip",
+      "sha256": "bbd3465c36247d59897ec561ecc1b79c514d4f3b2f8772b7c6d3b7457ef45390",
+      "size_bytes": 485617
+    }
+  ]
+}

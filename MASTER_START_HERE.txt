@@ -1,0 +1,30 @@
+ISAAC DEPLOY PACKAGE – START HIER
+=================================
+
+Kanonischer Einstieg:
+  python3 isaac_core.py
+
+Empfohlene Installer:
+  Termux:
+    bash install_termux.sh /root/Isaac/isaac
+  Alpine:
+    sh install_alpine.sh /root/Isaac/isaac
+
+Einheitlicher Start:
+  cd /root/Isaac/isaac
+  sh run_isaac.sh
+
+Vor dem ersten Start:
+  1. .env.example nach .env kopieren (Installer macht das automatisch)
+  2. API-Keys oder Ollama-Provider in .env setzen
+  3. sanity_check.py ausführen:
+       python3 sanity_check.py
+
+Wichtig:
+  - isaac_core.py ist der einzige kanonische Haupteinstieg.
+  - isaac_merged_final.py und isaac_core_orchestrator.py bleiben nur als Kompatibilitätsdateien.
+  - Für ACTIVE_PROVIDER=ollama muss Ollama separat laufen.
+
+Hinweis Android/Shared Storage:
+- Kanonischer Startordner für dieses Paket: /root/Isaac/isaac
+- Falls du im gemeinsamen Android-Speicher startest, zuerst in Termux `termux-setup-storage` ausführen.

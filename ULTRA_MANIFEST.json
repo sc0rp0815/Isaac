@@ -1,0 +1,571 @@
+{
+  "package": "isaac_ultra_deploy_package_v5",
+  "base": "isaac_master_deploy_package_v5",
+  "enhancements": [
+    "isaac_ctl.sh",
+    "update_master.sh",
+    "run_healthcheck.sh",
+    "package/healthcheck_isaac.py",
+    "package/launch_dashboard.sh",
+    "package/stop_isaac.sh"
+  ],
+  "file_count": 139,
+  "files": [
+    {
+      "path": "BUILD_MANIFEST.json",
+      "size": 512
+    },
+    {
+      "path": "BUILD_REPORT.txt",
+      "size": 512
+    },
+    {
+      "path": "QUICKSTART_MASTER.txt",
+      "size": 655
+    },
+    {
+      "path": "QUICKSTART_ULTRA.txt",
+      "size": 738
+    },
+    {
+      "path": "README_MASTER_PACKAGE.txt",
+      "size": 452
+    },
+    {
+      "path": "README_ULTRA_PACKAGE.txt",
+      "size": 438
+    },
+    {
+      "path": "install_alpine_master.sh",
+      "size": 478
+    },
+    {
+      "path": "install_master.sh",
+      "size": 3168
+    },
+    {
+      "path": "install_termux_master.sh",
+      "size": 450
+    },
+    {
+      "path": "isaac_ctl.sh",
+      "size": 1608
+    },
+    {
+      "path": "package/.env.example",
+      "size": 1203
+    },
+    {
+      "path": "package/ANALYSIS_REPORT.txt",
+      "size": 1269
+    },
+    {
+      "path": "package/COMPILE_CHECK.txt",
+      "size": 693
+    },
+    {
+      "path": "package/DEPLOY_GUIDE_TERMUX_ALPINE.txt",
+      "size": 735
+    },
+    {
+      "path": "package/DEPLOY_MANIFEST.json",
+      "size": 10549
+    },
+    {
+      "path": "package/DEPLOY_RUNTIME_AUDIT.md",
+      "size": 2402
+    },
+    {
+      "path": "package/DEPLOY_RUNTIME_AUDIT.txt",
+      "size": 3376
+    },
+    {
+      "path": "package/INSTALL_ORDER.txt",
+      "size": 811
+    },
+    {
+      "path": "package/INTEGRATION.txt",
+      "size": 808
+    },
+    {
+      "path": "package/ISAAC_V1_ARCHITECTURE_PATCH.md",
+      "size": 907
+    },
+    {
+      "path": "package/LATEST_STATE_COMPILE_CHECK.txt",
+      "size": 80
+    },
+    {
+      "path": "package/LATEST_STATE_MANIFEST.json",
+      "size": 5190
+    },
+    {
+      "path": "package/LATEST_STATE_REPORT.txt",
+      "size": 1362
+    },
+    {
+      "path": "package/MASTER_MANIFEST.json",
+      "size": 1730
+    },
+    {
+      "path": "package/MASTER_START_HERE.txt",
+      "size": 1108
+    },
+    {
+      "path": "package/MASTER_VALIDATION.txt",
+      "size": 730
+    },
+    {
+      "path": "package/MERGE_MANIFEST.json",
+      "size": 7720
+    },
+    {
+      "path": "package/MERGE_REPORT.txt",
+      "size": 911
+    },
+    {
+      "path": "package/MODULE_MAP.txt",
+      "size": 4656
+    },
+    {
+      "path": "package/ORCHESTRATOR_OPENROUTER_COMPILE.txt",
+      "size": 14
+    },
+    {
+      "path": "package/ORCHESTRATOR_OPENROUTER_MANIFEST.json",
+      "size": 4353
+    },
+    {
+      "path": "package/ORCHESTRATOR_OPENROUTER_REPORT.txt",
+      "size": 1405
+    },
+    {
+      "path": "package/PACKAGE_MANIFEST.json",
+      "size": 1494
+    },
+    {
+      "path": "package/PACKAGE_TEST_REPORT.txt",
+      "size": 380
+    },
+    {
+      "path": "package/PHASE2_IMPLEMENTATION_NOTES.md",
+      "size": 441
+    },
+    {
+      "path": "package/PHASE3_IMPLEMENTATION_NOTES.md",
+      "size": 1481
+    },
+    {
+      "path": "package/PHASE4_IMPLEMENTATION_NOTES.md",
+      "size": 533
+    },
+    {
+      "path": "package/PHASE4_VALIDATION_REPORT.txt",
+      "size": 8763
+    },
+    {
+      "path": "package/QUICKSTART.txt",
+      "size": 1899
+    },
+    {
+      "path": "package/README.md",
+      "size": 2325
+    },
+    {
+      "path": "package/README.txt",
+      "size": 761
+    },
+    {
+      "path": "package/README_DEPLOY.md",
+      "size": 901
+    },
+    {
+      "path": "package/README_EXTENSIONS.txt",
+      "size": 445
+    },
+    {
+      "path": "package/README_MASTER.md",
+      "size": 764
+    },
+    {
+      "path": "package/ROADMAP_NEXT_STEPS.md",
+      "size": 2159
+    },
+    {
+      "path": "package/RUNTIME_CLASSIFICATION.txt",
+      "size": 1261
+    },
+    {
+      "path": "package/START_FOLDER_AUDIT.txt",
+      "size": 110
+    },
+    {
+      "path": "package/START_FOLDER_NOTE.txt",
+      "size": 802
+    },
+    {
+      "path": "package/app_bridge.py",
+      "size": 540
+    },
+    {
+      "path": "package/apply_cumulative_stability_fix.sh",
+      "size": 312
+    },
+    {
+      "path": "package/apply_model_override_fix.sh",
+      "size": 1301
+    },
+    {
+      "path": "package/audit.py",
+      "size": 7051
+    },
+    {
+      "path": "package/background_loop.py",
+      "size": 13255
+    },
+    {
+      "path": "package/bootstrap_example.py",
+      "size": 145
+    },
+    {
+      "path": "package/browser.py",
+      "size": 22658
+    },
+    {
+      "path": "package/browser_chat.py",
+      "size": 2620
+    },
+    {
+      "path": "package/config.py",
+      "size": 8037
+    },
+    {
+      "path": "package/constitution.py",
+      "size": 8114
+    },
+    {
+      "path": "package/dashboard.html",
+      "size": 45921
+    },
+    {
+      "path": "package/dashboard_api.py",
+      "size": 2705
+    },
+    {
+      "path": "package/dashboard_home_mobile.html",
+      "size": 110
+    },
+    {
+      "path": "package/dashboard_live.html",
+      "size": 108
+    },
+    {
+      "path": "package/dashboard_tools.html",
+      "size": 11890
+    },
+    {
+      "path": "package/data/audit.jsonl",
+      "size": 21609
+    },
+    {
+      "path": "package/data/confirmation_queue.json",
+      "size": 1616
+    },
+    {
+      "path": "package/data/constitution.json",
+      "size": 4009
+    },
+    {
+      "path": "package/data/isaac.db",
+      "size": 114688
+    },
+    {
+      "path": "package/data/self_model.json",
+      "size": 1653
+    },
+    {
+      "path": "package/data/values.json",
+      "size": 455
+    },
+    {
+      "path": "package/dateiliste.txt",
+      "size": 2696
+    },
+    {
+      "path": "package/decomposer.py",
+      "size": 20237
+    },
+    {
+      "path": "package/decomposer_adaptive.py",
+      "size": 54
+    },
+    {
+      "path": "package/dispatcher.py",
+      "size": 18599
+    },
+    {
+      "path": "package/empathie.py",
+      "size": 14372
+    },
+    {
+      "path": "package/evals/__init__.py",
+      "size": 0
+    },
+    {
+      "path": "package/evals/eval_runner.py",
+      "size": 1205
+    },
+    {
+      "path": "package/evals/governance_eval.py",
+      "size": 1123
+    },
+    {
+      "path": "package/evals/identity_eval.py",
+      "size": 1049
+    },
+    {
+      "path": "package/evals/learning_eval.py",
+      "size": 921
+    },
+    {
+      "path": "package/evals/regression_eval.py",
+      "size": 768
+    },
+    {
+      "path": "package/evals/reliability_eval.py",
+      "size": 1360
+    },
+    {
+      "path": "package/evals/replay_eval.py",
+      "size": 1208
+    },
+    {
+      "path": "package/executor.py",
+      "size": 32210
+    },
+    {
+      "path": "package/healthcheck_isaac.py",
+      "size": 3576
+    },
+    {
+      "path": "package/install.sh",
+      "size": 2450
+    },
+    {
+      "path": "package/install_alpine.sh",
+      "size": 955
+    },
+    {
+      "path": "package/install_isaac_package.sh",
+      "size": 2737
+    },
+    {
+      "path": "package/install_or_patch_isaac.sh",
+      "size": 2640
+    },
+    {
+      "path": "package/install_or_patch_latest_state.sh",
+      "size": 2748
+    },
+    {
+      "path": "package/install_termux.sh",
+      "size": 902
+    },
+    {
+      "path": "package/installer_dashboard.html",
+      "size": 5859
+    },
+    {
+      "path": "package/instincts.py",
+      "size": 3483
+    },
+    {
+      "path": "package/integration_example.py",
+      "size": 297
+    },
+    {
+      "path": "package/isaac_core.py",
+      "size": 28675
+    },
+    {
+      "path": "package/isaac_core_orchestrator.py",
+      "size": 54
+    },
+    {
+      "path": "package/isaac_merged_final.py",
+      "size": 54
+    },
+    {
+      "path": "package/ki_dialog.py",
+      "size": 22018
+    },
+    {
+      "path": "package/ki_skills.py",
+      "size": 12729
+    },
+    {
+      "path": "package/launch_dashboard.sh",
+      "size": 626
+    },
+    {
+      "path": "package/learning_engine.py",
+      "size": 997
+    },
+    {
+      "path": "package/learning_policy.py",
+      "size": 1336
+    },
+    {
+      "path": "package/logic.py",
+      "size": 18769
+    },
+    {
+      "path": "package/mcp_client.py",
+      "size": 1098
+    },
+    {
+      "path": "package/mcp_registry.py",
+      "size": 3238
+    },
+    {
+      "path": "package/mcp_server.py",
+      "size": 1475
+    },
+    {
+      "path": "package/meaning.py",
+      "size": 3883
+    },
+    {
+      "path": "package/memory.py",
+      "size": 14512
+    },
+    {
+      "path": "package/monitor_api.py",
+      "size": 668
+    },
+    {
+      "path": "package/monitor_server.py",
+      "size": 15233
+    },
+    {
+      "path": "package/privilege.py",
+      "size": 11171
+    },
+    {
+      "path": "package/reflection.py",
+      "size": 1941
+    },
+    {
+      "path": "package/regelwerk.json",
+      "size": 2275
+    },
+    {
+      "path": "package/regelwerk.py",
+      "size": 20069
+    },
+    {
+      "path": "package/relay.py",
+      "size": 21433
+    },
+    {
+      "path": "package/requirements.txt",
+      "size": 633
+    },
+    {
+      "path": "package/run_isaac.sh",
+      "size": 298
+    },
+    {
+      "path": "package/runtime_readme.txt",
+      "size": 1025
+    },
+    {
+      "path": "package/sanity_check.py",
+      "size": 1455
+    },
+    {
+      "path": "package/search.py",
+      "size": 23815
+    },
+    {
+      "path": "package/secrets_store.py",
+      "size": 1195
+    },
+    {
+      "path": "package/security_policy.py",
+      "size": 4915
+    },
+    {
+      "path": "package/self_model.py",
+      "size": 6168
+    },
+    {
+      "path": "package/start_alpine.sh",
+      "size": 430
+    },
+    {
+      "path": "package/start_isaac.sh",
+      "size": 3891
+    },
+    {
+      "path": "package/start_termux.sh",
+      "size": 557
+    },
+    {
+      "path": "package/stop_isaac.sh",
+      "size": 428
+    },
+    {
+      "path": "package/sudo_gate.py",
+      "size": 9729
+    },
+    {
+      "path": "package/tool_registry.py",
+      "size": 5798
+    },
+    {
+      "path": "package/tool_runtime.py",
+      "size": 4071
+    },
+    {
+      "path": "package/tools_patch_README.txt",
+      "size": 761
+    },
+    {
+      "path": "package/trust_engine.py",
+      "size": 854
+    },
+    {
+      "path": "package/value_decisions.py",
+      "size": 2435
+    },
+    {
+      "path": "package/values.py",
+      "size": 2677
+    },
+    {
+      "path": "package/vector_memory.py",
+      "size": 10307
+    },
+    {
+      "path": "package/watchdog.py",
+      "size": 12137
+    },
+    {
+      "path": "package/web_urldispatcher.py",
+      "size": 44290
+    },
+    {
+      "path": "run_healthcheck.sh",
+      "size": 301
+    },
+    {
+      "path": "start_master_here.sh",
+      "size": 246
+    },
+    {
+      "path": "update_master.sh",
+      "size": 275
+    }
+  ]
+}
