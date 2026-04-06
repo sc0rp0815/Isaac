@@ -1,0 +1,422 @@
+[
+  {
+    "file": ".env.example",
+    "source": "isaac_v7",
+    "action": "base"
+  },
+  {
+    "file": "INTEGRATION.txt",
+    "source": "isaac_v7",
+    "action": "base"
+  },
+  {
+    "file": "PACKAGE_TEST_REPORT.txt",
+    "source": "isaac_v7",
+    "action": "base"
+  },
+  {
+    "file": "README.md",
+    "source": "isaac_v7",
+    "action": "base"
+  },
+  {
+    "file": "app_bridge.py",
+    "source": "isaac_v7",
+    "action": "base"
+  },
+  {
+    "file": "audit.py",
+    "source": "isaac_v7",
+    "action": "base"
+  },
+  {
+    "file": "background_loop.py",
+    "source": "isaac_v7",
+    "action": "base"
+  },
+  {
+    "file": "bootstrap_example.py",
+    "source": "isaac_v7",
+    "action": "base"
+  },
+  {
+    "file": "browser.py",
+    "source": "isaac_v7",
+    "action": "base"
+  },
+  {
+    "file": "browser_chat.py",
+    "source": "isaac_v7",
+    "action": "base"
+  },
+  {
+    "file": "config.py",
+    "source": "isaac_v7",
+    "action": "base"
+  },
+  {
+    "file": "dashboard.html",
+    "source": "isaac_v7",
+    "action": "base"
+  },
+  {
+    "file": "dashboard_api.py",
+    "source": "isaac_v7",
+    "action": "base"
+  },
+  {
+    "file": "dashboard_home_mobile.html",
+    "source": "isaac_v7",
+    "action": "base"
+  },
+  {
+    "file": "dashboard_live.html",
+    "source": "isaac_v7",
+    "action": "base"
+  },
+  {
+    "file": "dashboard_tools.html",
+    "source": "isaac_v7",
+    "action": "base"
+  },
+  {
+    "file": "dateiliste.txt",
+    "source": "isaac_v7",
+    "action": "base"
+  },
+  {
+    "file": "decomposer.py",
+    "source": "isaac_v7",
+    "action": "base"
+  },
+  {
+    "file": "decomposer_adaptive.py",
+    "source": "isaac_v7",
+    "action": "base"
+  },
+  {
+    "file": "dispatcher.py",
+    "source": "isaac_v7",
+    "action": "base"
+  },
+  {
+    "file": "empathie.py",
+    "source": "isaac_v7",
+    "action": "base"
+  },
+  {
+    "file": "executor.py",
+    "source": "isaac_v7",
+    "action": "base"
+  },
+  {
+    "file": "install.sh",
+    "source": "isaac_v7",
+    "action": "base"
+  },
+  {
+    "file": "installer_dashboard.html",
+    "source": "isaac_v7",
+    "action": "base"
+  },
+  {
+    "file": "integration_example.py",
+    "source": "isaac_v7",
+    "action": "base"
+  },
+  {
+    "file": "isaac_core.py",
+    "source": "isaac_v7",
+    "action": "base"
+  },
+  {
+    "file": "isaac_core_orchestrator.py",
+    "source": "isaac_v7",
+    "action": "base"
+  },
+  {
+    "file": "isaac_merged_final.py",
+    "source": "isaac_v7",
+    "action": "base"
+  },
+  {
+    "file": "ki_dialog.py",
+    "source": "isaac_v7",
+    "action": "base"
+  },
+  {
+    "file": "ki_skills.py",
+    "source": "isaac_v7",
+    "action": "base"
+  },
+  {
+    "file": "learning_engine.py",
+    "source": "isaac_v7",
+    "action": "base"
+  },
+  {
+    "file": "logic.py",
+    "source": "isaac_v7",
+    "action": "base"
+  },
+  {
+    "file": "memory.py",
+    "source": "isaac_v7",
+    "action": "base"
+  },
+  {
+    "file": "monitor_api.py",
+    "source": "isaac_v7",
+    "action": "base"
+  },
+  {
+    "file": "monitor_server.py",
+    "source": "isaac_v7",
+    "action": "base"
+  },
+  {
+    "file": "privilege.py",
+    "source": "isaac_v7",
+    "action": "base"
+  },
+  {
+    "file": "regelwerk.json",
+    "source": "isaac_v7",
+    "action": "base"
+  },
+  {
+    "file": "regelwerk.py",
+    "source": "isaac_v7",
+    "action": "base"
+  },
+  {
+    "file": "relay.py",
+    "source": "isaac_v7",
+    "action": "base"
+  },
+  {
+    "file": "requirements.txt",
+    "source": "isaac_v7",
+    "action": "base"
+  },
+  {
+    "file": "runtime_readme.txt",
+    "source": "isaac_v7",
+    "action": "base"
+  },
+  {
+    "file": "search.py",
+    "source": "isaac_v7",
+    "action": "base"
+  },
+  {
+    "file": "secrets_store.py",
+    "source": "isaac_v7",
+    "action": "base"
+  },
+  {
+    "file": "start_isaac.sh",
+    "source": "isaac_v7",
+    "action": "base"
+  },
+  {
+    "file": "sudo_gate.py",
+    "source": "isaac_v7",
+    "action": "base"
+  },
+  {
+    "file": "tool_registry.py",
+    "source": "isaac_v7",
+    "action": "base"
+  },
+  {
+    "file": "tool_runtime.py",
+    "source": "isaac_v7",
+    "action": "base"
+  },
+  {
+    "file": "tools_patch_README.txt",
+    "source": "isaac_v7",
+    "action": "base"
+  },
+  {
+    "file": "trust_engine.py",
+    "source": "isaac_v7",
+    "action": "base"
+  },
+  {
+    "file": "vector_memory.py",
+    "source": "isaac_v7",
+    "action": "base"
+  },
+  {
+    "file": "watchdog.py",
+    "source": "isaac_v7",
+    "action": "base"
+  },
+  {
+    "file": "web_urldispatcher.py",
+    "source": "isaac_v7",
+    "action": "base"
+  },
+  {
+    "file": "README.md",
+    "source": "root_sources",
+    "action": "same"
+  },
+  {
+    "file": "Gespräch .txt",
+    "source": "root_sources",
+    "action": "add"
+  },
+  {
+    "file": "requirements.txt",
+    "source": "root_sources",
+    "action": "override"
+  },
+  {
+    "file": "empathie.py",
+    "source": "root_sources",
+    "action": "same"
+  },
+  {
+    "file": "config.py",
+    "source": "root_sources",
+    "action": "override"
+  },
+  {
+    "file": "monitor_server.py",
+    "source": "root_sources",
+    "action": "override"
+  },
+  {
+    "file": "dashboard.html",
+    "source": "root_sources",
+    "action": "override"
+  },
+  {
+    "file": "audit.py",
+    "source": "root_sources",
+    "action": "same"
+  },
+  {
+    "file": "relay.py",
+    "source": "root_sources",
+    "action": "override"
+  },
+  {
+    "file": "decomposer.py",
+    "source": "root_sources",
+    "action": "override"
+  },
+  {
+    "file": "dispatcher.py",
+    "source": "root_sources",
+    "action": "override"
+  },
+  {
+    "file": "ki_dialog.py",
+    "source": "root_sources",
+    "action": "same"
+  },
+  {
+    "file": "browser.py",
+    "source": "root_sources",
+    "action": "same"
+  },
+  {
+    "file": "background_loop.py",
+    "source": "root_sources",
+    "action": "override"
+  },
+  {
+    "file": "executor.py",
+    "source": "root_sources",
+    "action": "override"
+  },
+  {
+    "file": "logic.py",
+    "source": "root_sources",
+    "action": "same"
+  },
+  {
+    "file": "tool_registry.py",
+    "source": "dashboard_tools_patch",
+    "action": "skip_existing"
+  },
+  {
+    "file": "secrets_store.py",
+    "source": "dashboard_tools_patch",
+    "action": "skip_existing"
+  },
+  {
+    "file": "dashboard_api.py",
+    "source": "dashboard_tools_patch",
+    "action": "skip_existing"
+  },
+  {
+    "file": "dashboard_tools.html",
+    "source": "dashboard_tools_patch",
+    "action": "skip_existing"
+  },
+  {
+    "file": "integration_example.py",
+    "source": "dashboard_tools_patch",
+    "action": "skip_existing"
+  },
+  {
+    "file": "README.txt",
+    "source": "dashboard_tools_patch",
+    "action": "add_missing"
+  },
+  {
+    "file": "tool_registry.py",
+    "source": "hybrid_runtime_bundle",
+    "action": "skip_existing"
+  },
+  {
+    "file": "secrets_store.py",
+    "source": "hybrid_runtime_bundle",
+    "action": "skip_existing"
+  },
+  {
+    "file": "browser_chat.py",
+    "source": "hybrid_runtime_bundle",
+    "action": "skip_existing"
+  },
+  {
+    "file": "tool_runtime.py",
+    "source": "hybrid_runtime_bundle",
+    "action": "skip_existing"
+  },
+  {
+    "file": "dashboard_api.py",
+    "source": "hybrid_runtime_bundle",
+    "action": "skip_existing"
+  },
+  {
+    "file": "installer_dashboard.html",
+    "source": "hybrid_runtime_bundle",
+    "action": "skip_existing"
+  },
+  {
+    "file": "runtime_readme.txt",
+    "source": "hybrid_runtime_bundle",
+    "action": "skip_existing"
+  },
+  {
+    "file": "install_isaac_package.sh",
+    "source": "install_helper",
+    "action": "add_missing"
+  },
+  {
+    "file": "QUICKSTART.txt",
+    "source": "install_helper",
+    "action": "add_missing"
+  },
+  {
+    "file": "Gespräch .txt",
+    "source": "cleanup",
+    "action": "removed_nonproject"
+  }
+]

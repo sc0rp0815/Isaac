@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Isaac Dashboard – Tools & APIs</title>
+  <style>
+    :root { --bg:#0f1115; --panel:#171a21; --muted:#8d96a8; --text:#edf1f7; --line:#2a3040; --accent:#67a3ff; --good:#39c46a; --bad:#ff6b6b; --warn:#ffb347; }
+    * { box-sizing: border-box; }
+    body { margin:0; background:var(--bg); color:var(--text); font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif; }
+    header { position:sticky; top:0; z-index:10; background:rgba(15,17,21,.95); backdrop-filter:blur(10px); border-bottom:1px solid var(--line); padding:14px; }
+    h1 { font-size:20px; margin:0 0 8px; }
+    .sub { color:var(--muted); font-size:13px; }
+    .wrap { padding:14px; max-width:920px; margin:0 auto; }
+    .grid { display:grid; gap:12px; }
+    .card { background:var(--panel); border:1px solid var(--line); border-radius:16px; padding:14px; box-shadow:0 8px 30px rgba(0,0,0,.18); }
+    .toolbar { display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }
+    button { background:#212736; color:var(--text); border:1px solid #35405a; border-radius:12px; padding:10px 12px; cursor:pointer; font-weight:600; }
+    button.primary { background:var(--accent); color:#08111f; border-color:transparent; }
+    button.danger { background:#3a1f26; color:#ffd6d6; border-color:#5f2d37; }
+    input, select, textarea { width:100%; background:#10141d; color:var(--text); border:1px solid #31384a; border-radius:12px; padding:10px 12px; font:inherit; }
+    textarea { min-height:92px; resize:vertical; }
+    label { display:grid; gap:6px; font-size:13px; color:var(--muted); }
+    .two { display:grid; gap:10px; grid-template-columns:1fr 1fr; }
+    .three { display:grid; gap:10px; grid-template-columns:1fr 1fr 1fr; }
+    .list { display:grid; gap:12px; margin-top:14px; }
+    .tool { border:1px solid var(--line); border-radius:14px; padding:12px; background:#141923; }
+    .row { display:flex; gap:8px; align-items:center; justify-content:space-between; }
+    .name { font-size:16px; font-weight:700; }
+    .meta { color:var(--muted); font-size:12px; margin-top:6px; }
+    .pill { display:inline-flex; align-items:center; gap:6px; border-radius:999px; padding:6px 10px; font-size:12px; border:1px solid var(--line); background:#0f131c; }
+    .ok { color:var(--good); } .bad { color:var(--bad); } .warn { color:var(--warn); }
+    .hidden { display:none; }
+    pre { white-space:pre-wrap; word-break:break-word; background:#0d1016; border:1px solid var(--line); padding:12px; border-radius:12px; color:#c9d3e5; max-height:240px; overflow:auto; }
+    @media (max-width:680px) { .two, .three { grid-template-columns:1fr; } }
+  </style>
+</head>
+<body>
+  <header><div class="wrap" style="padding:0;"><h1>Isaac – Tools & APIs</h1><div class="sub">Neues Tool hinzufügen, API-Key speichern, Testlauf ausführen, Priorität verwalten.</div></div></header>
+  <div class="wrap grid">
+    <section class="card">
+      <div class="row"><div><div class="name">Add-Flow</div><div class="sub">Geführter Wizard für API, Suchmaschine, Web-Tool oder Skript.</div></div><button class="primary" onclick="resetForm()">Neu</button></div>
+      <div class="grid" style="margin-top:12px;">
+        <div class="two">
+          <label>Typ<select id="kind" onchange="onKindChange()"><option value="api">API</option><option value="search">Suchmaschine</option><option value="web_tool">Web-Tool</option><option value="script">Lokales Skript</option></select></label>
+          <label>Name<input id="name" placeholder="z. B. OpenWeather oder GitHub Search" /></label>
+        </div>
+        <label>Beschreibung<textarea id="description" placeholder="Wofür soll das Tool genutzt werden?"></textarea></label>
+        <div class="two">
+          <label>Kategorie<input id="category" placeholder="z. B. wetter, suche, code, dateien" value="general" /></label>
+          <label>Priorität<input id="priority" type="number" min="0" max="100" value="50" /></label>
+        </div>
+        <div class="two">
+          <label id="urlLabel">Base URL / Website<input id="base_url" placeholder="https://example.com/api" /></label>
+          <label id="endpointWrap">Endpoint / Testpfad<input id="endpoint" placeholder="/v1/status" /></label>
+        </div>
+        <div class="two hidden" id="scriptBlock">
+          <label>Skriptpfad<input id="script_path" placeholder="/data/data/.../mein_script.sh" /></label>
+          <label>Website-URL (optional)<input id="website_url" placeholder="https://..." /></label>
+        </div>
+        <div class="three">
+          <label>Auth-Typ<select id="auth_type" onchange="onAuthChange()"><option value="none">Keine</option><option value="header">Header</option><option value="query">Query</option></select></label>
+          <label>Auth-Feld<input id="auth_field" placeholder="Authorization / api_key" /></label>
+          <label>Prefix<input id="auth_prefix" placeholder="Bearer " /></label>
+        </div>
+        <div class="two">
+          <label>API-Key / Secret<input id="api_key" type="password" placeholder="optional" /></label>
+          <label>Query-Parameter (für Suche)<input id="query_param" value="q" /></label>
+        </div>
+        <div class="toolbar"><button class="primary" onclick="saveTool()">Speichern</button><button onclick="refreshTools()">Aktualisieren</button></div>
+      </div>
+    </section>
+    <section class="card">
+      <div class="row"><div><div class="name">Registrierte Tools</div><div class="sub">Testen, deaktivieren, Priorität ändern oder löschen.</div></div></div>
+      <div id="toolList" class="list"></div>
+    </section>
+    <section class="card">
+      <div class="name">Testausgabe</div><div class="sub">Antworten aus Tool-Tests erscheinen hier.</div>
+      <pre id="output">Bereit.</pre>
+    </section>
+  </div>
+  <script>
+    let currentEditId = null;
+    function byId(id) { return document.getElementById(id); }
+    function onKindChange() {
+      const kind = byId('kind').value;
+      byId('scriptBlock').classList.toggle('hidden', kind !== 'script');
+      byId('endpointWrap').classList.toggle('hidden', kind === 'script');
+      byId('urlLabel').innerText = (kind === 'search') ? 'Such-URL' : 'Base URL / Website';
+    }
+    function onAuthChange() {
+      const disabled = byId('auth_type').value === 'none';
+      byId('auth_field').disabled = disabled;
+      byId('auth_prefix').disabled = disabled;
+      byId('api_key').disabled = disabled;
+    }
+    function payloadFromForm() {
+      return {
+        tool_id: currentEditId || undefined,
+        kind: byId('kind').value,
+        name: byId('name').value.trim(),
+        description: byId('description').value.trim(),
+        category: byId('category').value.trim(),
+        priority: Number(byId('priority').value || 50),
+        base_url: byId('base_url').value.trim(),
+        endpoint: byId('endpoint').value.trim(),
+        script_path: byId('script_path').value.trim(),
+        website_url: byId('website_url').value.trim(),
+        auth_type: byId('auth_type').value,
+        auth_field: byId('auth_field').value.trim(),
+        auth_prefix: byId('auth_prefix').value,
+        api_key: byId('api_key').value.trim(),
+        query_param: byId('query_param').value.trim()
+      };
+    }
+    function resetForm() {
+      currentEditId = null;
+      ['name','description','base_url','endpoint','script_path','website_url','auth_field','auth_prefix','api_key'].forEach(id => byId(id).value = '');
+      byId('kind').value = 'api';
+      byId('category').value = 'general';
+      byId('priority').value = '50';
+      byId('query_param').value = 'q';
+      byId('auth_type').value = 'none';
+      onKindChange(); onAuthChange();
+    }
+    async function saveTool() {
+      const payload = payloadFromForm();
+      const route = currentEditId ? '/api/tools/update' : '/api/tools/add';
+      const res = await fetch(route, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)});
+      const data = await res.json();
+      byId('output').textContent = JSON.stringify(data, null, 2);
+      if (data.ok) { resetForm(); refreshTools(); }
+    }
+    async function refreshTools() {
+      const res = await fetch('/api/tools');
+      const data = await res.json();
+      const box = byId('toolList');
+      box.innerHTML = '';
+      for (const tool of data.tools || []) {
+        const el = document.createElement('div');
+        const statusClass = tool.last_status === 'ok' ? 'ok' : (tool.last_status === 'failed' ? 'bad' : 'warn');
+        el.className = 'tool';
+        el.innerHTML = `
+          <div class="row">
+            <div><div class="name">${escapeHtml(tool.name)}</div><div class="meta">${escapeHtml(tool.kind)} · ${escapeHtml(tool.category)} · ${tool.active ? 'aktiv' : 'deaktiviert'}</div></div>
+            <div class="pill ${statusClass}">${tool.last_status || 'unknown'}</div>
+          </div>
+          <div class="meta" style="margin-top:8px;">Priorität: ${tool.priority} · Vertrauen: ${tool.trust} · Erfolg: ${tool.success_rate}%</div>
+          <div class="toolbar">
+            <button onclick="editTool('${tool.tool_id}')">Bearbeiten</button>
+            <button onclick="testTool('${tool.tool_id}')">Testen</button>
+            <button onclick="toggleTool('${tool.tool_id}', ${!tool.active})">${tool.active ? 'Deaktivieren' : 'Aktivieren'}</button>
+            <button class="danger" onclick="deleteTool('${tool.tool_id}')">Löschen</button>
+          </div>`;
+        box.appendChild(el);
+      }
+    }
+    async function editTool(toolId) {
+      const res = await fetch(`/api/tools/${toolId}`);
+      const data = await res.json();
+      if (!data.ok) return;
+      const t = data.tool;
+      currentEditId = t.tool_id;
+      byId('kind').value = t.kind || 'api';
+      byId('name').value = t.name || '';
+      byId('description').value = t.description || '';
+      byId('category').value = t.category || 'general';
+      byId('priority').value = t.priority ?? 50;
+      byId('base_url').value = t.base_url || '';
+      byId('endpoint').value = t.endpoint || '';
+      byId('script_path').value = t.script_path || '';
+      byId('website_url').value = t.website_url || '';
+      byId('auth_type').value = t.auth_type || 'none';
+      byId('auth_field').value = t.auth_field || '';
+      byId('auth_prefix').value = t.auth_prefix || '';
+      byId('query_param').value = t.query_param || 'q';
+      byId('api_key').value = '';
+      onKindChange(); onAuthChange();
+    }
+    async function testTool(toolId) {
+      const res = await fetch('/api/tools/test', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({tool_id:toolId, test_query:'isaac test'})});
+      const data = await res.json();
+      byId('output').textContent = JSON.stringify(data, null, 2);
+      refreshTools();
+    }
+    async function toggleTool(toolId, active) {
+      const res = await fetch('/api/tools/toggle', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({tool_id:toolId, active})});
+      const data = await res.json();
+      byId('output').textContent = JSON.stringify(data, null, 2);
+      refreshTools();
+    }
+    async function deleteTool(toolId) {
+      if (!confirm('Tool wirklich löschen?')) return;
+      const res = await fetch('/api/tools/delete', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({tool_id:toolId})});
+      const data = await res.json();
+      byId('output').textContent = JSON.stringify(data, null, 2);
+      refreshTools();
+    }
+    function escapeHtml(str) {
+      return String(str || '').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#039;');
+    }
+    resetForm(); refreshTools();
+  </script>
+</body>
+</html>

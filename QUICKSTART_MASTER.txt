@@ -1,0 +1,24 @@
+ISAAC MASTER DEPLOY PACKAGE V5
+==============================
+
+Empfohlene Installation
+
+Termux:
+  bash install_termux_master.sh ~/Isaac/isaac
+
+Alpine:
+  bash install_alpine_master.sh ~/Isaac/isaac
+
+Direkt ohne Bootstrap:
+  bash install_master.sh ~/Isaac/isaac
+
+Was der Installer macht:
+- erstellt vor dem Überschreiben ein Backup des Zielordners
+- kopiert den konsolidierten V5-Masterstand
+- schützt eine vorhandene .env
+- legt bei Bedarf .env aus .env.example an
+- installiert Abhängigkeiten
+- führt Compile-/Import-Smoke-Test aus
+
+Hinweis:
+In Alpine/Termux ist eine virtuelle Umgebung empfohlen. Die Bootstrap-Skripte richten diese automatisch ein.

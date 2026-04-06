@@ -1,0 +1,88 @@
+#!/data/data/com.termux/files/usr/bin/bash
+# ════════════════════════════════════════════════════════
+#  Isaac – Startup-Skript für Android/Termux
+#  Startet Ollama + Isaac, hält beide am Laufen
+# ════════════════════════════════════════════════════════
+
+ISAAC_DIR="${ISAAC_DIR:-/storage/emulated/0/Gpt-isaac/deploy/isaac_runtime}"
+LOG_DIR="$ISAAC_DIR/logs"
+mkdir -p "$LOG_DIR"
+
+echo "╔══════════════════════════════════════╗"
+echo "║  Isaac – Startup                     ║"
+echo "╚══════════════════════════════════════╝"
+
+# Termux Wake-Lock aktivieren (verhindert dass Android alles killt)
+termux-wake-lock 2>/dev/null &
+
+# ── Ollama starten ────────────────────────────────────────
+start_ollama() {
+  echo "[Isaac] Nutze externes Ollama: ${OLLAMA_HOST:-http://127.0.0.1:11434}"
+  if ! curl -fsS "${OLLAMA_HOST:-http://127.0.0.1:11434}/api/tags" >/dev/null 2>&1; then
+    echo "[Isaac] Fehler: externes Ollama nicht erreichbar unter ${OLLAMA_HOST:-http://127.0.0.1:11434}"
+    echo "[Isaac] Starte Ollama in normalem Termux mit: ollama serve"
+    exit 1
+  fi
+  echo "[Isaac] Externes Ollama erreichbar ✓"
+}
+
+# ── Ollama Modell prüfen ──────────────────────────────────
+check_model() {
+    echo "[Isaac] Prüfe Modell: $OLLAMA_MODEL"
+    if ! ollama list 2>/dev/null | grep -q "$OLLAMA_MODEL"; then
+        echo "[Isaac] Modell $OLLAMA_MODEL nicht gefunden."
+        cat > "$HOME/Modelfile" << 'EOF'
+PARAMETER num_ctx 1024
+PARAMETER num_predict 256
+EOF
+        if [ $? -eq 0 ]; then
+        else
+        fi
+    else
+        echo "[Isaac] Modell $OLLAMA_MODEL gefunden ✓"
+    fi
+}
+
+# ── Isaac starten ─────────────────────────────────────────
+start_isaac() {
+    echo "[Isaac] Starte Isaac..."
+    cd "$ISAAC_DIR" || exit 1
+    export OLLAMA_MODEL="$OLLAMA_MODEL"
+    python3 isaac_core.py 2>&1 | tee -a "$LOG_DIR/isaac.log"
+}
+
+# ── Haupt-Loop ────────────────────────────────────────────
+start_ollama
+check_model
+
+RESTART_COUNT=0
+while true; do
+    RESTART_COUNT=$((RESTART_COUNT + 1))
+    echo ""
+    echo "[Isaac] ═══ Start #$RESTART_COUNT ═══"
+    echo "[Isaac] Zeit: $(date '+%Y-%m-%d %H:%M:%S')"
+
+    # Ollama-Health prüfen
+    if ! curl -s http://localhost:11434/api/tags > /dev/null 2>&1; then
+        echo "[Isaac] Ollama nicht erreichbar – Neustart..."
+        start_ollama
+        sleep 5
+    fi
+
+    start_isaac
+    EXIT_CODE=$?
+
+    echo "[Isaac] Isaac beendet (Exit: $EXIT_CODE)"
+
+    # Bei normalem Beenden (Ctrl+C) nicht neu starten
+    if [ $EXIT_CODE -eq 0 ]; then
+        echo "[Isaac] Normales Beenden."
+        break
+    fi
+
+    echo "[Isaac] Neustart in 10 Sekunden... (Ctrl+C zum Abbrechen)"
+    sleep 10
+done
+
+echo "[Isaac] Shutdown."
+termux-wake-unlock 2>/dev/null

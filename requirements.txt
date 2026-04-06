@@ -1,0 +1,27 @@
+# Isaac v5.4 – Dependencies
+
+# Kern (Pflicht)
+aiohttp>=3.9.0
+websockets>=12.0
+python-dotenv>=1.0.0
+
+# Browser-Automation
+playwright>=1.40.0
+# Nach Installation: playwright install chromium
+
+# Semantisches Gedächtnis (empfohlen, optional)
+# Aktiviert sich automatisch wenn installiert:
+chromadb>=0.4.0
+
+# Termux/Android: Akku-Awareness
+# pkg install termux-api   (im Termux-Terminal, kein pip)
+
+# Lokale Modelle (empfohlen)
+# Ollama separat installieren: https://ollama.ai
+# ollama pull phi3:mini
+
+# Schnelle kostenlose API-Alternative:
+# GROQ_API_KEY in .env → https://console.groq.com (kostenlos)
+
+# Dashboard/API
+Flask>=3.0.0

@@ -1,0 +1,34 @@
+Isaac Latest-State Orchestrator OpenRouter Report
+===============================================
+
+Zielbild
+--------
+- ACTIVE_PROVIDER bleibt lokal (z. B. ollama)
+- Decomposer nutzt OpenRouter gezielt als ausgelagerten Modellpool
+- OPENROUTER_MODEL_* wird rollenbasiert verwendet
+
+Umgesetzte Änderungen
+---------------------
+1. relay.py
+   - ask() und ask_with_fallback() akzeptieren jetzt model_override
+   - Cache-Key trennt Provider und Modell sauber
+   - OpenRouter/OpenAI-kompatible Handler können Modellnamen pro Request überschreiben
+
+2. decomposer.py
+   - neue Auswahlfunktion für OpenRouter-Modelle anhand der Fragment-Skills
+   - neue Providerwahl pro Fragment
+   - Fragmente mit Analyse/Reasoning/Recherch/Planung/Kreativ/Code gehen bevorzugt an OpenRouter
+   - lokale Standardlogik bleibt für normale Antworten erhalten
+
+Rollenmapping
+-------------
+- OPENROUTER_MODEL_NEMOTRON: schwere Analyse / Synthese / Kontextfragment
+- OPENROUTER_MODEL_STEP: Fakten / schnelle Recherchefragmente
+- OPENROUTER_MODEL_TRINITY: kreative Perspektiven
+- OPENROUTER_MODEL_LIQUID_THINKING: tiefes Reasoning
+- OPENROUTER_MODEL_LIQUID_INSTRUCT: Planung / direkte Instruktion / Code
+
+Wichtige Einschränkung
+---------------------
+Der Decomposer weist jetzt Modellrollen zu, aber er bewertet noch nicht dynamisch Kosten,
+Latenz oder Provider-Gesundheit pro Modell. Die Fallback-Logik bleibt auf Provider-Ebene.

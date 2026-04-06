@@ -1,0 +1,24 @@
+{
+  "bundle_name": "isaac_master_deploy_package_v5",
+  "created_utc": "2026-03-27T14:08:21Z",
+  "shell_syntax_checks": {
+    "install_master.sh": {
+      "returncode": 0,
+      "stderr": ""
+    },
+    "install_termux_master.sh": {
+      "returncode": 0,
+      "stderr": ""
+    },
+    "install_alpine_master.sh": {
+      "returncode": 0,
+      "stderr": ""
+    },
+    "start_master_here.sh": {
+      "returncode": 0,
+      "stderr": ""
+    }
+  },
+  "python_compileall_ok": true,
+  "python_compileall_stderr": ""
+}
