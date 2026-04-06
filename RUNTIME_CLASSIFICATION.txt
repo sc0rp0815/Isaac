@@ -1,0 +1,72 @@
+RUNTIME CLASSIFICATION
+======================
+
+KANONISCHER START
+- isaac_core.py
+
+START-/INSTALL-SKRIPTE
+- run_isaac.sh
+- install_termux.sh
+- install_alpine.sh
+- start_termux.sh
+- start_alpine.sh
+- start_isaac.sh        (Kompatibilitäts-Wrapper)
+- install.sh            (Kompatibilitäts-Wrapper)
+
+KERNMODULE
+- config.py
+- privilege.py
+- audit.py
+- memory.py
+- logic.py
+- relay.py
+- executor.py
+- watchdog.py
+- decomposer.py
+- dispatcher.py
+- empathie.py
+- ki_dialog.py
+- ki_skills.py
+- regelwerk.py
+- sudo_gate.py
+- search.py
+- tool_registry.py
+- tool_runtime.py
+- trust_engine.py
+- vector_memory.py
+- background_loop.py
+
+MONITOR / DASHBOARD
+- monitor_server.py
+- monitor_api.py
+- dashboard.html
+- dashboard_home_mobile.html
+- dashboard_live.html
+- dashboard_tools.html
+- dashboard_api.py
+- app_bridge.py
+
+OPTIONALE / ERWEITERTE MODULE
+- browser.py
+- browser_chat.py
+- secrets_store.py
+- decomposer_adaptive.py
+- integration_example.py
+- bootstrap_example.py
+- learning_engine.py
+- web_urldispatcher.py
+
+KOMPATIBILITÄT / ALTSTART
+- isaac_merged_final.py
+- isaac_core_orchestrator.py
+
+DATEN / KONFIG
+- .env.example
+- regelwerk.json
+- requirements.txt
+
+TEST / VALIDIERUNG
+- sanity_check.py
+- COMPILE_CHECK.txt
+- PACKAGE_TEST_REPORT.txt
+- MASTER_VALIDATION.txt

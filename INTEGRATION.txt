@@ -1,0 +1,22 @@
+Complete integrated package v7
+
+This package includes the original Isaac modules plus additive integration modules for:
+- Tool registry
+- Browser-chat tools
+- Secrets store
+- Dashboard API
+- Monitor API
+- Learning engine
+- Trust engine
+
+Important:
+- config.py was reconstructed from the Isaac codebase because the /mnt/data/config.py file was a Flask config module and incompatible with the Isaac imports.
+- Existing core files were otherwise preserved as much as possible.
+- installer_dashboard.html and dashboard_tools.html are included for incremental dashboard integration.
+
+Suggested next runtime step:
+1) install requirements
+2) playwright install chromium
+3) configure .env
+4) run app_bridge.py for tool installer endpoints or your existing monitor server
+5) run isaac_core.py in your own environment

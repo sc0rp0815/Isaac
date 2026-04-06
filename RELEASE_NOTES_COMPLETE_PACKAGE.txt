@@ -1,0 +1,34 @@
+ISAAC Complete Release Package — 2026-03-27
+============================================
+
+Ziel
+----
+Dieses Paket ist als vollständiges Gesamtpaket gebaut worden, nicht nur als Patch.
+Es basiert primär auf `isaac_current_full_backup.zip` und enthält zusätzlich die hochgeladenen Original-ZIPs unverändert im Archiv-Unterordner.
+
+Enthalten
+---------
+1. Laufzeitprojekt im Root dieses Ordners
+2. Datenbestand (`data/`, `logs/`, Konfigurationsdateien, Dokumentation)
+3. Historische Original-ZIPs unter `archives/original_zips/`
+4. Entpackte Vergleichsquellen unter `archives/unpacked_sources/`
+
+Gezielte Reparaturen in diesem Release
+-------------------------------------
+- `dashboard.html` repariert:
+  - doppeltes `const WS_HOST` entfernt (JS-Syntaxfehler)
+  - WebSocket-Verbindung robuster gemacht
+  - automatische Erkennung des aktiven WS-Ports via `/monitor_config`
+  - Port-Fallback 8765-8774 im Dashboard ergänzt
+- `monitor_server.py` erweitert:
+  - HTTP-Endpoint `/monitor_config` hinzugefügt
+  - Dashboard kann nun den tatsächlich gebundenen WS-Port abfragen
+
+Validierung
+-----------
+- Python-Compile-Check: OK
+- JavaScript-Syntaxcheck für `dashboard.html`: OK
+
+Hinweis
+-------
+Dieses Paket ist bewusst „maximal vollständig“ gebaut. Deshalb sind auch historische Quellen und Original-ZIPs enthalten.

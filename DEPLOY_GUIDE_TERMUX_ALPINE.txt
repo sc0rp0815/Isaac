@@ -1,0 +1,26 @@
+Deploy Guide (Termux / Alpine)
+=============================
+
+Standard-ZIP:
+  isaac_complete_openrouter_values_patch.zip
+
+Termux:
+  termux-setup-storage
+  cd /storage/emulated/0/Gpt-isaac/deploy
+  unzip -o isaac_complete_openrouter_values_patch.zip -d isaac_runtime
+  cd isaac_runtime
+  python3 -m venv .venv
+  source .venv/bin/activate
+  pip install --upgrade pip wheel setuptools
+  pip install -r requirements.txt
+  python -m playwright install chromium
+  cp .env.example .env
+  python isaac_core.py
+
+Patch/Installer:
+  bash install_or_patch_isaac.sh /storage/emulated/0/Gpt-isaac/deploy/isaac_runtime
+
+OpenRouter:
+  - ACTIVE_PROVIDER=openrouter
+  - OPENROUTER_API_KEY=...
+  - optional: OPENROUTER_HTTP_REFERER, OPENROUTER_APP_TITLE
