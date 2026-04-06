@@ -1,0 +1,146 @@
+MODULE MAP
+==========
+
+app_bridge.py
+  lokale Imports: dashboard_api, monitor_api
+  externe Imports: flask
+
+audit.py
+  lokale Imports: config, privilege
+  externe Imports: asyncio, json, logging, pathlib, threading, time, typing
+
+background_loop.py
+  lokale Imports: audit, browser, config, ki_dialog, memory, regelwerk, search, watchdog
+  externe Imports: asyncio, dataclasses, json, logging, pathlib, time, typing
+
+bootstrap_example.py
+  lokale Imports: app_bridge
+  externe Imports: -
+
+browser.py
+  lokale Imports: audit, config, privilege
+  externe Imports: asyncio, dataclasses, json, logging, pathlib, playwright, re, stat, time, typing, urllib
+
+browser_chat.py
+  lokale Imports: -
+  externe Imports: __future__, dataclasses, playwright
+
+config.py
+  lokale Imports: -
+  externe Imports: dataclasses, dotenv, os, pathlib, typing
+
+dashboard_api.py
+  lokale Imports: secrets_store, tool_registry, tool_runtime
+  externe Imports: __future__, flask
+
+decomposer.py
+  lokale Imports: audit, browser, config, ki_skills, relay
+  externe Imports: asyncio, dataclasses, hashlib, logging, re, time, typing
+
+decomposer_adaptive.py
+  lokale Imports: decomposer
+  externe Imports: -
+
+dispatcher.py
+  lokale Imports: audit, browser, config, logic, relay
+  externe Imports: asyncio, dataclasses, json, logging, re, time, typing
+
+empathie.py
+  lokale Imports: -
+  externe Imports: dataclasses, json, logging, pathlib, re, time, typing
+
+executor.py
+  lokale Imports: audit, browser, config, dispatcher, logic, memory, privilege, relay, search, watchdog
+  externe Imports: asyncio, dataclasses, enum, json, logging, re, time, typing, uuid
+
+integration_example.py
+  lokale Imports: dashboard_api
+  externe Imports: flask
+
+isaac_core.py
+  lokale Imports: audit, background_loop, browser, config, decomposer, dispatcher, empathie, executor, ki_dialog, ki_skills, logic, memory, monitor_server, privilege, regelwerk, relay, search, sudo_gate, watchdog
+  externe Imports: asyncio, logging, re, time, typing
+
+isaac_core_orchestrator.py
+  lokale Imports: isaac_core
+  externe Imports: -
+
+isaac_merged_final.py
+  lokale Imports: isaac_core
+  externe Imports: -
+
+ki_dialog.py
+  lokale Imports: audit, browser, config, relay
+  externe Imports: asyncio, dataclasses, hashlib, json, logging, pathlib, time, typing
+
+ki_skills.py
+  lokale Imports: config
+  externe Imports: dataclasses, json, logging, pathlib, time, typing
+
+learning_engine.py
+  lokale Imports: config
+  externe Imports: __future__, dataclasses, json, pathlib, time
+
+logic.py
+  lokale Imports: audit, config
+  externe Imports: dataclasses, logging, re, time, typing
+
+memory.py
+  lokale Imports: audit, config, vector_memory
+  externe Imports: contextlib, json, logging, pathlib, sqlite3, time, typing
+
+monitor_api.py
+  lokale Imports: audit, executor, monitor_server, relay, tool_registry
+  externe Imports: __future__, flask
+
+monitor_server.py
+  lokale Imports: audit, config, executor, logic, memory, privilege, relay
+  externe Imports: aiohttp, asyncio, json, logging, os, pathlib, time, typing, websockets
+
+privilege.py
+  lokale Imports: config
+  externe Imports: dataclasses, functools, logging, time, typing
+
+regelwerk.py
+  lokale Imports: audit, config
+  externe Imports: dataclasses, json, logging, pathlib, re, time, typing
+
+relay.py
+  lokale Imports: audit, config
+  externe Imports: aiohttp, asyncio, collections, dataclasses, hashlib, logging, time, typing
+
+search.py
+  lokale Imports: audit, config
+  externe Imports: aiohttp, asyncio, dataclasses, hashlib, json, logging, re, time, typing, urllib
+
+secrets_store.py
+  lokale Imports: config
+  externe Imports: __future__, json, pathlib, time
+
+sudo_gate.py
+  lokale Imports: audit, config
+  externe Imports: dataclasses, hashlib, hmac, logging, os, secrets, stat, time, typing
+
+tool_registry.py
+  lokale Imports: config
+  externe Imports: __future__, dataclasses, json, pathlib, time, typing, uuid
+
+tool_runtime.py
+  lokale Imports: browser_chat, secrets_store, tool_registry
+  externe Imports: __future__, requests, subprocess, urllib
+
+trust_engine.py
+  lokale Imports: config
+  externe Imports: __future__, json, pathlib
+
+vector_memory.py
+  lokale Imports: config
+  externe Imports: chromadb, json, logging, pathlib, time, typing
+
+watchdog.py
+  lokale Imports: audit, config, executor, relay
+  externe Imports: asyncio, dataclasses, logging, time, typing
+
+web_urldispatcher.py
+  lokale Imports: -
+  externe Imports: abc, asyncio, base64, functools, hashlib, helpers, html, http, inspect, keyword, os, pathlib, platform, re, sys, typedefs, types, typing, warnings, web_app, web_exceptions, web_fileresponse, web_request, web_response, web_routedef, yarl
