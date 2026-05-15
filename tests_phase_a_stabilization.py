@@ -1,6 +1,7 @@
 import asyncio
 import json
 import unittest
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -603,6 +604,104 @@ class TestCriticalBugs(unittest.TestCase):
         self.assertEqual(data["decision_trace"][0]["phase"], "eligibility")
         self.assertEqual(data["decision_trace"][0]["event"], "evaluated")
         json.dumps(data)
+
+from hermes_compat import (
+    BrowserAction,
+    ComputerAction,
+    ExecutionContext,
+    HermesBrowserAdapter,
+    HermesCompatibilityAdapter,
+    HermesComputerUseAdapter,
+    HermesToolSchemaMapper,
+    PermissionMetadata,
+)
+from mcp_registry import MCPRegistry
+from security_policy import ConfirmationPolicy
+
+
+class TestHermesCompatibilityLayer(unittest.TestCase):
+    def setUp(self):
+        self.policy = ConfirmationPolicy(path=Path('/tmp/isaac_test_confirmation_queue.json'))
+        self.policy._queue = []
+        self.adapter = HermesCompatibilityAdapter(confirmation_policy=self.policy)
+
+    def test_skill_registration(self):
+        self.adapter.register_skill({"name": "search_assist", "description": "help", "tools": ["search"]})
+        self.assertIsNotNone(self.adapter.skill_registry.get("search_assist"))
+
+    def test_tool_schema_mapping(self):
+        normalized = HermesToolSchemaMapper.normalize({"name": "lookup", "inputSchema": {"type": "object"}})
+        self.assertEqual(normalized["name"], "lookup")
+        self.assertEqual(normalized["risk"], "medium")
+
+    def test_permission_blocking(self):
+        self.adapter.register_tool(
+            {"name": "danger_tool", "description": "x", "risk": "critical", "outside_effect": True},
+            lambda payload: {"ok": True, "payload": payload},
+        )
+        result = self.adapter.execute_tool("danger_tool", {"a": 1}, ExecutionContext(caller="user", level=0))
+        self.assertFalse(result.ok)
+        self.assertIn("Review-ID", result.error)
+
+    def test_confirmation_queue(self):
+        self.adapter.register_tool(
+            {"name": "confirm_tool", "description": "x", "risk": "critical", "outside_effect": True},
+            lambda payload: {"ok": True},
+        )
+        _ = self.adapter.execute_tool("confirm_tool", {}, ExecutionContext(caller="user", level=0))
+        self.assertGreaterEqual(len(self.policy.pending()), 1)
+
+    def test_browser_adapter_dry_run(self):
+        browser = HermesBrowserAdapter()
+        result = browser.run(BrowserAction(action="browser_navigate", url="https://example.org"), dry_run=True)
+        self.assertTrue(result.ok)
+        self.assertTrue(result.output["dry_run"])
+
+    def test_computer_use_action_validation(self):
+        cu = HermesComputerUseAdapter()
+        result = cu.validate(ComputerAction(action="shell_command", params={"command": "echo ok"}, permission=PermissionMetadata(timeout=5, allowed_scope="workspace")))
+        self.assertTrue(result.ok)
+
+
+    def test_computer_use_action_blocks_unsafe_shell(self):
+        cu = HermesComputerUseAdapter()
+        result = cu.validate(ComputerAction(
+            action="shell_command",
+            params={"command": "sudo rm -rf /"},
+            permission=PermissionMetadata(timeout=5, allowed_scope="workspace"),
+        ))
+        self.assertFalse(result.ok)
+
+    def test_computer_use_action_scope_validation(self):
+        cu = HermesComputerUseAdapter()
+        result = cu.validate(ComputerAction(
+            action="observe",
+            permission=PermissionMetadata(timeout=5, allowed_scope="internet"),
+        ))
+        self.assertFalse(result.ok)
+
+    def test_failed_tool_execution(self):
+        self.adapter.register_tool({"name": "broken", "description": "x"}, lambda payload: 1 / 0)
+        result = self.adapter.execute_tool("broken", {}, ExecutionContext(caller="user", level=9))
+        self.assertFalse(result.ok)
+
+    def test_audit_logging_and_memory_writeback_and_mcp_mirror(self):
+        writes = []
+        self.adapter.register_tool({"name": "safe_tool", "description": "x", "risk": "low"}, lambda payload: {"value": 1})
+        mcp = MCPRegistry()
+        self.adapter.mirror_tool_to_mcp(mcp, "safe_tool")
+        result = self.adapter.execute_flow(
+            user_task="use safe tool",
+            tool_name="safe_tool",
+            payload={},
+            ctx=ExecutionContext(caller="user", level=9, task_id="t-hermes"),
+            memory_writeback=lambda task, tool_result: writes.append((task, tool_result.ok)),
+        )
+        mcp_result = mcp.invoke_tool("safe_tool", {})
+        self.assertTrue(result.ok)
+        self.assertTrue(mcp_result["ok"])
+        self.assertEqual(writes[0][0], "use safe tool")
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -148,6 +148,13 @@ class AuditLog:
             "caller": caller, "cmd": cmd[:300], "returncode": returncode
         })
 
+
+    @classmethod
+    def confirmation(cls, status: str, aktion: str, queue_id: str, reason: str = ""):
+        cls._record("confirmation", {
+            "status": status, "aktion": aktion, "queue_id": queue_id, "reason": reason[:300]
+        })
+
     # ── Lesen ──────────────────────────────────────────────────────────────────
     @classmethod
     def recent(cls, n: int = 100, typ: Optional[str] = None) -> list[dict]:
