@@ -15,6 +15,7 @@ from mcp_client import MCPClient
 from mcp_registry import get_mcp_registry
 from task_tool_state import get_task_tool_state_store
 from tool_policy import ToolDecisionReason, ToolPolicy, ToolSelectionDecision
+from result_contract import ensure_result_contract, error_result
 
 _browser = None
 
@@ -324,18 +325,18 @@ async def select_live_tool_for_task(task, prompt: str, iteration: int, policy: T
 
 async def run_selected_tool(selection: dict, prompt: str) -> dict:
     if not selection:
-        return {"ok": False, "error": "Keine Tool-Auswahl"}
+        return error_result("Keine Tool-Auswahl", metadata={"source": "selection"})
     source = selection.get("source")
     if source == "registry":
-        return await _run_registry_tool(selection.get("tool"), prompt)
+        return ensure_result_contract(await _run_registry_tool(selection.get("tool"), prompt), source="registry")
     if source in ("mcp_remote", "mcp_local"):
         if source == "mcp_local":
             result = get_mcp_registry().invoke_tool(selection.get("mcp_name", ""), {"prompt": prompt, "query": prompt})
-            return {"ok": bool(result.get("ok")), "content": json.dumps(result, ensure_ascii=False, indent=2)[:3000], "via": "mcp_local", "status_code": 200 if result.get("ok") else 400}
+            return ensure_result_contract(result, source="mcp_local")
         client = MCPClient(selection.get("mcp_url") or MCP_BRIDGE_URL)
         result = await client.invoke_tool(selection.get("mcp_name", ""), {"prompt": prompt, "query": prompt})
-        return {"ok": bool(result.get("ok")), "content": json.dumps(result, ensure_ascii=False, indent=2)[:3000], "via": "mcp_remote", "status_code": result.get("status_code", 200)}
-    return {"ok": False, "error": f"Unbekannte Tool-Quelle: {source}"}
+        return ensure_result_contract(result, source="mcp_remote")
+    return error_result(f"Unbekannte Tool-Quelle: {source}", metadata={"source": source or "unknown"})
 
 
 async def run_tool(tool, prompt: str) -> dict:

@@ -35,6 +35,7 @@ from tool_runtime import select_live_tool_for_task, run_selected_tool
 from task_tool_state import get_task_tool_state_store
 from low_complexity import ClassificationResult
 from decision_trace import DecisionTrace, TracePhase
+from result_contract import ensure_result_contract
 from tool_policy import (
     ToolPolicy,
     ToolDecisionReason,
@@ -444,7 +445,7 @@ class Executor:
         return decision
 
     def _tool_context_block(self, tool_name: str, tool_kind: str, via: str, result: dict) -> str:
-        content = (result.get('content') or result.get('error') or '').strip()[:2200]
+        content = str(result.get('output') or result.get('error') or '').strip()[:2200]
         return (
             "\n\n[Tool-Kontext]\n"
             f"Tool: {tool_name}\n"
@@ -515,7 +516,7 @@ class Executor:
                     "run_index": tool_runs + 1,
                 },
             )
-            result = await run_selected_tool(selection, prompt)
+            result = ensure_result_contract(await run_selected_tool(selection, prompt), source="executor_boundary")
             identifier = selection.get("identifier", "")
             name = selection.get("name", identifier)
             kind = selection.get("kind", "")
@@ -525,7 +526,7 @@ class Executor:
                 task.id, source=selection.get("source", "unknown"), identifier=identifier, name=name,
                 feature_type=selection.get("mcp_feature", "tool"), ok=bool(result.get('ok')), category=category,
                 kind=kind, note=result.get('error', '') or result.get('via', ''), status_code=result.get('status_code'),
-                output=result.get('content', '') or result.get('error', '')
+                output=str(result.get('output') or result.get('error') or '')
             )
             task.tool_strategy = self._tool_state.get_or_create(task.id).to_dict()
             tool_runs += 1
@@ -586,7 +587,7 @@ class Executor:
                     "via": via,
                 },
             )
-            successful_outputs.append(f"{name}:\n{(result.get('content') or result.get('error') or '').strip()[:1600]}")
+            successful_outputs.append(f"{name}:\n{str(result.get('output') or result.get('error') or '').strip()[:1600]}")
             task.tool_selection_reason = ToolDecisionReason.SELECTED_CANDIDATE.value
 
         next_input = ""

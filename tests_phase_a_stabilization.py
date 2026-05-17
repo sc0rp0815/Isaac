@@ -700,6 +700,8 @@ class TestHermesCompatibilityLayer(unittest.TestCase):
         mcp_result = mcp.invoke_tool("safe_tool", {})
         self.assertTrue(result.ok)
         self.assertTrue(mcp_result["ok"])
+        self.assertIn("output", mcp_result)
+        self.assertIn("metadata", mcp_result)
         self.assertEqual(writes[0][0], "use safe tool")
 
     def test_mcp_mirror_propagates_blocked_tool_failure(self):
@@ -712,6 +714,46 @@ class TestHermesCompatibilityLayer(unittest.TestCase):
         mcp_result = mcp.invoke_tool("danger_tool", {})
         self.assertFalse(mcp_result["ok"])
         self.assertIn("Review-ID", mcp_result["error"])
+        self.assertIn("queue_id", mcp_result)
+
+    def test_result_contract_direct_and_mcp_paths(self):
+        self.adapter.register_tool(
+            {"name": "contract_ok", "description": "x", "risk": "low", "input_schema": {"type": "object", "required": ["query"]}},
+            lambda payload: {"echo": payload["query"]},
+        )
+        self.adapter.register_tool(
+            {"name": "contract_fail", "description": "x", "risk": "low"},
+            lambda payload: (_ for _ in ()).throw(RuntimeError("boom")),
+        )
+        mcp = MCPRegistry()
+        self.adapter.mirror_tool_to_mcp(mcp, "contract_ok")
+        self.adapter.mirror_tool_to_mcp(mcp, "contract_fail")
+
+        direct_ok = self.adapter.execute_tool("contract_ok", {"query": "hi"}, ExecutionContext(caller="user", level=9))
+        self.assertTrue(direct_ok.ok)
+        self.assertIsInstance(direct_ok.metadata, dict)
+
+        direct_arg_error = self.adapter.execute_tool("contract_ok", {}, ExecutionContext(caller="user", level=9))
+        self.assertFalse(direct_arg_error.ok)
+        self.assertIn("invalid_arguments", direct_arg_error.error)
+
+        direct_handler_error = self.adapter.execute_tool("contract_fail", {}, ExecutionContext(caller="user", level=9))
+        self.assertFalse(direct_handler_error.ok)
+        self.assertIn("boom", direct_handler_error.error)
+
+        mcp_ok = mcp.invoke_tool("contract_ok", {"query": "world"})
+        self.assertTrue(mcp_ok["ok"])
+        self.assertIn("output", mcp_ok)
+        self.assertIn("metadata", mcp_ok)
+
+        mcp_arg_error = mcp.invoke_tool("contract_ok", {})
+        self.assertFalse(mcp_arg_error["ok"])
+        self.assertIn("invalid_arguments", mcp_arg_error["error"])
+
+        mcp_handler_error = mcp.invoke_tool("contract_fail", {})
+        self.assertFalse(mcp_handler_error["ok"])
+        self.assertIn("boom", mcp_handler_error["error"])
+
 
 
 if __name__ == '__main__':

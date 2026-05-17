@@ -6,6 +6,7 @@ from typing import Any, Callable, Optional
 from audit import AuditLog
 from mcp_registry import MCPRegistry
 from security_policy import ConfirmationPolicy, SecurityVerdict
+from result_contract import ensure_result_contract, error_result
 
 
 @dataclass(frozen=True)
@@ -19,6 +20,8 @@ class ToolResult:
     output: Any = None
     error: str = ""
     metadata: dict[str, Any] = field(default_factory=dict)
+    queue_id: str = ""
+    audit_id: str = ""
 
 
 @dataclass(frozen=True)
@@ -203,32 +206,44 @@ class HermesCompatibilityAdapter:
             handler=lambda **kwargs: self._invoke_mirrored_tool(tool.name, kwargs),
         )
 
-    def _invoke_mirrored_tool(self, tool_name: str, payload: dict[str, Any]) -> Any:
+    def _invoke_mirrored_tool(self, tool_name: str, payload: dict[str, Any]) -> dict[str, Any]:
         result = self.execute_tool(tool_name, payload, ExecutionContext(caller="mcp"))
-        if not result.ok:
-            queue_id = result.metadata.get("queue_id")
-            queue_suffix = f" | queue_id={queue_id}" if queue_id else ""
-            raise RuntimeError(f"{result.error}{queue_suffix}")
-        return result.output
+        return ensure_result_contract(result.__dict__, source="hermes_mcp_mirror")
 
     def _permission_check(self, tool: Tool, ctx: ExecutionContext) -> SecurityVerdict:
         meta = tool.permission.as_policy_meta()
         return self.confirmation_policy.analyze(tool.name, ctx, meta)
 
+
+    def _validate_payload(self, tool: Tool, payload: dict[str, Any]) -> str:
+        schema = tool.input_schema or {}
+        required = schema.get("required") or []
+        if not isinstance(payload, dict):
+            return "invalid_arguments: payload_must_be_object"
+        missing = [name for name in required if name not in payload]
+        if missing:
+            return f"invalid_arguments: missing_required={','.join(missing)}"
+        return ""
+
     def execute_tool(self, tool_name: str, payload: dict[str, Any], ctx: ExecutionContext) -> ToolResult:
         tool = self.tools.get(tool_name)
         if not tool or not tool.enabled:
-            return ToolResult(ok=False, error=f"Tool unavailable: {tool_name}")
+            return ToolResult(**error_result(f"Tool unavailable: {tool_name}", metadata={"tool": tool_name}))
+
+        validation_error = self._validate_payload(tool, payload)
+        if validation_error:
+            return ToolResult(**error_result(validation_error, metadata={"tool": tool_name}))
 
         verdict = self._permission_check(tool, ctx)
         if not verdict.allowed:
             self.audit_log.action(ctx.caller, "tool_blocked", f"{tool_name} | {verdict.reason}", level=ctx.level, erfolg=False)
-            return ToolResult(ok=False, error=verdict.reason, metadata={"queue_id": verdict.queue_id, "risk": verdict.risk})
+            return ToolResult(**error_result(verdict.reason, metadata={"risk": verdict.risk}, queue_id=verdict.queue_id))
 
         self.audit_log.action(ctx.caller, "tool_execute", tool_name, level=ctx.level, erfolg=True)
         result = tool.handler(ToolInput(payload), ctx)
-        self.audit_log.task(ctx.task_id or "hermes-task", "tool_result", detail=tool_name, score=1.0 if result.ok else 0.0)
-        return result
+        normalized = ensure_result_contract(result.__dict__ if isinstance(result, ToolResult) else result, source="hermes_handler")
+        self.audit_log.task(ctx.task_id or "hermes-task", "tool_result", detail=tool_name, score=1.0 if normalized.get("ok") else 0.0)
+        return ToolResult(**normalized)
 
     def execute_flow(self, user_task: str, tool_name: str, payload: dict[str, Any], ctx: ExecutionContext, memory_writeback: Optional[Callable[[str, ToolResult], None]] = None) -> ToolResult:
         self.audit_log.action(ctx.caller, "intent_detected", user_task[:120], level=ctx.level, erfolg=True)
