@@ -2,9 +2,11 @@ __pycache__/
 *.pyc
 *.pyo
 *.log
+*.out
 *.bak
 .env
 .env.backup*
+.venv/
 data/
 archives/
 package/
