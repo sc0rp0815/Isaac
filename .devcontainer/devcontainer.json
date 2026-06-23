@@ -1,0 +1,15 @@
+{
+	"name": "Isaac",
+	"image": "mcr.microsoft.com/devcontainers/python:3.12",
+	"forwardPorts": [8766, 8765],
+	"portsAttributes": {
+		"8766": {
+			"label": "Isaac Dashboard",
+			"onAutoForward": "notify"
+		},
+		"8765": {
+			"label": "Isaac WebSocket",
+			"onAutoForward": "silent"
+		}
+	}
+}

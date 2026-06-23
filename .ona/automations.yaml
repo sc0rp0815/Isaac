@@ -1,0 +1,30 @@
+tasks:
+  installDeps:
+    name: Install dependencies
+    description: Create a virtual environment and install Python dependencies including Playwright's Chromium browser.
+    command: |
+      python3 -m venv .venv
+      .venv/bin/pip install --upgrade pip
+      .venv/bin/pip install -r requirements.txt
+      .venv/bin/playwright install chromium
+    triggeredBy:
+      - manual
+      - postDevcontainerStart
+      - prebuild
+
+services:
+  isaac-core:
+    name: Isaac Core
+    description: Starts the Isaac kernel together with the Dashboard HTTP server (port 8766) and WebSocket monitor (port 8765).
+    triggeredBy:
+      - manual
+      - postEnvironmentStart
+    commands:
+      start: |
+        ona environment port open 8766 --dont-wait --admission creator_only --name "Isaac Dashboard"
+        ona environment port open 8765 --dont-wait --admission creator_only --name "Isaac WebSocket"
+        ALLOWED_HOST="$(ona environment port get 8766 -f URL | cut -c 9-)"
+        mkdir -p logs runtime workspace
+        exec .venv/bin/python isaac_core.py
+      ready: |
+        curl -sf http://localhost:8766/
