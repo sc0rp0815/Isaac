@@ -34,6 +34,7 @@ class BackgroundState:
     letzter_diskussion: float = 0.0
     letzter_research:   float = 0.0
     letzter_dump:       float = 0.0
+    letzter_decay:      float = 0.0
     letzter_ideen:      float = 0.0
     zyklen:             int   = 0
     dialoge_gesamt:     int   = 0
@@ -62,6 +63,7 @@ class BackgroundLoop:
     DISKUSSION_INTERVAL = 1800     # 30 Minuten
     RESEARCH_INTERVAL   = 2400     # 40 Minuten
     DUMP_INTERVAL       = 600      # 10 Minuten
+    DECAY_INTERVAL      = 3600     # 1 Stunde
     TICK                = 30       # MOBILE: Größerer Tick-Abstand
 
     # MOBILE: Sparmodus ab 30%
@@ -177,6 +179,11 @@ class BackgroundLoop:
                     await self._knowledge_check()
                     self.state.letzter_knowledge = now
 
+                # Forgetting/Decay (nur bei Ladegerät)
+                if akku["plugged"] and now - self.state.letzter_decay > self.DECAY_INTERVAL:
+                    await self._decay_check()
+                    self.state.letzter_decay = now
+
                 # KI-Dialog (nur bei Ladegerät)
                 if akku["plugged"] and now - self.state.letzter_ki_dialog > self.KI_DIALOG_INTERVAL:
                     await self._ki_dialog_zyklus()
@@ -246,6 +253,25 @@ class BackgroundLoop:
                     self._puffer.append(frage)
         except Exception as e:
             log.debug(f"Knowledge-Check: {e}")
+
+    async def _decay_check(self):
+        try:
+            from forgetting_decay import run_decay_cycle
+            summary = run_decay_cycle()
+            total = (
+                summary.get("preference_facts_decayed", 0)
+                + summary.get("values_decayed", 0)
+                + summary.get("development_events_archived", 0)
+            )
+            if total:
+                self._notiere(
+                    "Decay: "
+                    f"prefs={summary.get('preference_facts_decayed', 0)} "
+                    f"values={summary.get('values_decayed', 0)} "
+                    f"archived={summary.get('development_events_archived', 0)}"
+                )
+        except Exception as e:
+            log.debug(f"Decay-Check: {e}")
 
     # ── KI-Dialog Zyklus ─────────────────────────────────────────────────────
     async def _ki_dialog_zyklus(self):

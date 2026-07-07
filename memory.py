@@ -16,6 +16,7 @@ import json
 import time
 import logging
 import re
+from datetime import datetime, timedelta
 from pathlib import Path
 from dataclasses import dataclass
 from typing import Optional, Any
@@ -25,6 +26,10 @@ from config import DB_PATH, get_config
 from audit  import AuditLog
 
 log = logging.getLogger("Isaac.Memory")
+
+MIN_RETRIEVAL_CONFIDENCE = 0.12
+PREFERENCE_KEY_MARKERS = ("pref", "stil", "antwort", "tool", "chat", "agreement")
+OWNER_SOURCES = frozenset({"steffen", "owner"})
 
 
 @dataclass(frozen=True)
@@ -141,6 +146,25 @@ CREATE TABLE IF NOT EXISTS task_procedures (
     last_status         TEXT    DEFAULT '',
     degraded            INTEGER DEFAULT 0,
     metadata            TEXT    DEFAULT '{}'
+);
+
+-- Archivierte Entwicklungs-Events (Forgetting/Decay)
+CREATE TABLE IF NOT EXISTS development_events_archive (
+    id                  INTEGER PRIMARY KEY,
+    ts                  TEXT    NOT NULL,
+    event_type          TEXT    NOT NULL,
+    target_kind         TEXT    NOT NULL,
+    target_key          TEXT    NOT NULL,
+    delta               REAL    DEFAULT 0.0,
+    confidence_before   REAL    DEFAULT 0.0,
+    confidence_after    REAL    DEFAULT 0.0,
+    evidence_refs       TEXT    DEFAULT '[]',
+    contradiction_refs  TEXT    DEFAULT '[]',
+    reason              TEXT    DEFAULT '',
+    requires_review     INTEGER DEFAULT 0,
+    reviewed_by_owner   INTEGER DEFAULT 0,
+    metadata            TEXT    DEFAULT '{}',
+    archived_at         TEXT    NOT NULL
 );
 
 -- Task-Checkpoints für Resume
@@ -272,21 +296,82 @@ class Memory:
         return [dict(r) for r in rows]
 
     # ── Fakten ────────────────────────────────────────────────────────────────
+    @staticmethod
+    def _is_preference_key(key: str) -> bool:
+        lowered = (key or "").lower()
+        return any(marker in lowered for marker in PREFERENCE_KEY_MARKERS)
+
+    @staticmethod
+    def _is_owner_source(source: str) -> bool:
+        return (source or "").strip().lower() in OWNER_SOURCES
+
+    def get_fact_record(self, key: str) -> Optional[dict]:
+        with _conn() as con:
+            row = con.execute("SELECT * FROM facts WHERE key=?", (key,)).fetchone()
+        return dict(row) if row else None
+
+    def update_fact_confidence(self, key: str, confidence: float) -> bool:
+        ts = time.strftime("%Y-%m-%d %H:%M:%S")
+        with _conn() as con:
+            cur = con.execute(
+                "UPDATE facts SET confidence=?, updated=? WHERE key=?",
+                (float(confidence), ts, key),
+            )
+        return cur.rowcount > 0
+
     def set_fact(self, key: str, value: str, source: str = "",
                  confidence: float = 1.0) -> bool:
         """Schreibt oder aktualisiert eine Tatsache."""
+        from learning_policy import bounded_update
+
         ts = time.strftime("%Y-%m-%d %H:%M:%S")
+        owner_confirmed = self._is_owner_source(source)
+        if owner_confirmed:
+            confidence = 1.0
+
         with _conn() as con:
             existing = con.execute(
-                "SELECT id FROM facts WHERE key=?", (key,)
+                "SELECT id, value, confidence, source FROM facts WHERE key=?", (key,)
             ).fetchone()
             if existing:
+                old_value = (existing["value"] or "").strip()
+                old_conf = float(existing["confidence"] or 1.0)
+                new_conf = float(confidence)
+                if (
+                    old_value
+                    and old_value != value.strip()
+                    and not owner_confirmed
+                ):
+                    delta = bounded_update(
+                        "preference",
+                        -1.0,
+                        evidence_strength=0.8,
+                        repetition=1.0,
+                    )
+                    new_conf = max(MIN_RETRIEVAL_CONFIDENCE, min(new_conf, old_conf + delta))
+                    try:
+                        self.log_development_event(
+                            event_type="fact_contradiction",
+                            target_kind="fact",
+                            target_key=key,
+                            delta=round(new_conf - old_conf, 4),
+                            confidence_before=old_conf,
+                            confidence_after=new_conf,
+                            contradiction_refs=[old_value[:120]],
+                            reason=f"Widerspruch: '{old_value[:80]}' → '{value[:80]}'",
+                            requires_review=True,
+                            metadata={"source": source, "old_value": old_value[:120]},
+                        )
+                    except Exception as e:
+                        log.debug(f"Contradiction-Log: {e}")
                 con.execute(
                     "UPDATE facts SET value=?, source=?, "
                     "confidence=?, updated=? WHERE key=?",
-                    (value, source, confidence, ts, key)
+                    (value, source, new_conf, ts, key)
                 )
             else:
+                if self._is_preference_key(key) and not owner_confirmed:
+                    confidence = min(float(confidence), 0.65)
                 con.execute(
                     "INSERT INTO facts (ts, key, value, source, "
                     "confidence, updated) VALUES (?,?,?,?,?,?)",
@@ -301,6 +386,26 @@ class Memory:
                 "SELECT value FROM facts WHERE key=?", (key,)
             ).fetchone()
         return row["value"] if row else None
+
+    def list_decay_candidate_facts(self, limit: int = 100) -> list[dict]:
+        with _conn() as con:
+            rows = con.execute(
+                "SELECT * FROM facts ORDER BY updated ASC LIMIT ?",
+                (max(1, int(limit)),),
+            ).fetchall()
+        candidates = []
+        for row in rows:
+            fact = dict(row)
+            key = fact.get("key", "")
+            conf = float(fact.get("confidence") or 0.0)
+            if not self._is_preference_key(key):
+                continue
+            if conf > 0.75:
+                continue
+            if self._is_owner_source(fact.get("source", "")) and conf >= 0.9:
+                continue
+            candidates.append(fact)
+        return candidates
 
     def search_facts(self, query: str, limit: int = 10) -> list[dict]:
         terms = [t for t in re.findall(r"[\w]+", (query or "").lower()) if len(t) >= 2]
@@ -324,7 +429,10 @@ class Memory:
                        ORDER BY confidence DESC LIMIT ?""",
                     (like, like, limit),
                 ).fetchall()
-        return [dict(r) for r in rows]
+        return [
+            dict(r) for r in rows
+            if float(r["confidence"] or 0.0) >= MIN_RETRIEVAL_CONFIDENCE
+        ]
 
     def all_facts(self) -> dict[str, str]:
         with _conn() as con:
@@ -519,7 +627,10 @@ class Memory:
         query_terms = [w for w in re.findall(r"\w+", user_input.lower()) if len(w) >= 4][:5]
         query = " ".join(query_terms) or user_input[:40]
         directives = self.get_directives()[:3]
-        facts = self.search_facts(query, limit=6) if query else []
+        facts = [
+            f for f in (self.search_facts(query, limit=8) if query else [])
+            if float(f.get("confidence") or 0.0) >= MIN_RETRIEVAL_CONFIDENCE
+        ][:6]
         relevant_results = self.get_relevant_results(query, limit=4) if query else []
         relevant_procedures = self.search_procedures(query, limit=3) if query else []
         history = self.get_working_memory(n_history)
@@ -556,7 +667,10 @@ class Memory:
             }
             relevant_facts.append(normalized)
             key = (fact.get("key") or "").lower()
-            if any(marker in key for marker in ("pref", "stil", "antwort", "tool", "chat", "agreement")):
+            if (
+                self._is_preference_key(key)
+                and normalized["confidence"] >= MIN_RETRIEVAL_CONFIDENCE
+            ):
                 preferences.append({
                     "source": "fact",
                     "key": normalized["key"],
@@ -781,6 +895,86 @@ class Memory:
                 (max(1, int(n)),),
             ).fetchall()
         return [dict(r) for r in rows]
+
+    def archive_development_events(
+        self, older_than_days: int = 90, keep_recent: int = 300
+    ) -> int:
+        cutoff = (
+            datetime.now() - timedelta(days=max(1, int(older_than_days)))
+        ).strftime("%Y-%m-%d %H:%M:%S")
+        archived_at = time.strftime("%Y-%m-%d %H:%M:%S")
+        with _conn() as con:
+            rows = con.execute(
+                """SELECT * FROM development_events
+                   WHERE ts < ? AND id NOT IN (
+                       SELECT id FROM development_events
+                       ORDER BY id DESC LIMIT ?
+                   )""",
+                (cutoff, max(1, int(keep_recent))),
+            ).fetchall()
+            if not rows:
+                return 0
+            for row in rows:
+                con.execute(
+                    "INSERT OR REPLACE INTO development_events_archive "
+                    "(id, ts, event_type, target_kind, target_key, delta, "
+                    "confidence_before, confidence_after, evidence_refs, "
+                    "contradiction_refs, reason, requires_review, "
+                    "reviewed_by_owner, metadata, archived_at) "
+                    "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                    (
+                        row["id"],
+                        row["ts"],
+                        row["event_type"],
+                        row["target_kind"],
+                        row["target_key"],
+                        row["delta"],
+                        row["confidence_before"],
+                        row["confidence_after"],
+                        row["evidence_refs"],
+                        row["contradiction_refs"],
+                        row["reason"],
+                        row["requires_review"],
+                        row["reviewed_by_owner"],
+                        row["metadata"],
+                        archived_at,
+                    ),
+                )
+            ids = [row["id"] for row in rows]
+            placeholders = ",".join("?" for _ in ids)
+            con.execute(
+                f"DELETE FROM development_events WHERE id IN ({placeholders})",
+                ids,
+            )
+        AuditLog.memory_write("Memory", "archive", f"development_events:{len(rows)}")
+        return len(rows)
+
+    def recent_archived_development_events(self, n: int = 20) -> list[dict]:
+        with _conn() as con:
+            rows = con.execute(
+                "SELECT * FROM development_events_archive "
+                "ORDER BY archived_at DESC LIMIT ?",
+                (max(1, int(n)),),
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+    def decay_stats(self) -> dict:
+        with _conn() as con:
+            n_active = con.execute("SELECT COUNT(*) FROM development_events").fetchone()[0]
+            n_archive = con.execute(
+                "SELECT COUNT(*) FROM development_events_archive"
+            ).fetchone()[0]
+            n_weak = con.execute(
+                """SELECT COUNT(*) FROM facts
+                   WHERE confidence < ? AND confidence >= ?""",
+                (0.75, MIN_RETRIEVAL_CONFIDENCE),
+            ).fetchone()[0]
+        return {
+            "development_active": int(n_active),
+            "development_archived": int(n_archive),
+            "weak_facts": int(n_weak),
+            "min_retrieval_confidence": MIN_RETRIEVAL_CONFIDENCE,
+        }
 
     # ── Task-Checkpoints ──────────────────────────────────────────────────────
     def save_task_checkpoint(

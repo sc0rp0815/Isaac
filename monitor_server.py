@@ -296,6 +296,7 @@ class MonitorServer:
                 "self_model_phase": get_self_model().summary().get("phase", "unknown"),
                 "development_recent": len(self.memory.recent_development_events(8)),
                 "procedures_total": int(self.memory.stats().get("procedures", 0)),
+                "decay": self.memory.decay_stats(),
             }
         except Exception:
             pass
@@ -806,6 +807,26 @@ class DashboardHTTPServer:
                     "procedures": get_memory().list_procedures(limit),
                 })
 
+            async def governance_decay(request):
+                from forgetting_decay import load_decay_state, run_decay_cycle
+                from memory import get_memory
+
+                if request.method == "POST":
+                    summary = run_decay_cycle()
+                    return web.json_response({
+                        "ok": True,
+                        "ran": True,
+                        "summary": summary,
+                        "stats": get_memory().decay_stats(),
+                        "last_run": load_decay_state(),
+                    })
+                return web.json_response({
+                    "ok": True,
+                    "stats": get_memory().decay_stats(),
+                    "last_run": load_decay_state(),
+                    "archived_recent": get_memory().recent_archived_development_events(15),
+                })
+
             async def task_checkpoints(request):
                 task_id = (request.rel_url.query.get("task_id") or "").strip()
                 if not task_id:
@@ -869,6 +890,8 @@ class DashboardHTTPServer:
             app.router.add_get("/api/governance/development", governance_development)
             app.router.add_get("/api/governance/memory-blocks", governance_memory_blocks)
             app.router.add_get("/api/governance/procedures", governance_procedures)
+            app.router.add_get("/api/governance/decay", governance_decay)
+            app.router.add_post("/api/governance/decay", governance_decay)
             app.router.add_get("/api/tasks/checkpoints", task_checkpoints)
             app.router.add_get("/api/update/packages", updater_packages)
             app.router.add_post("/api/update/inspect", updater_inspect)

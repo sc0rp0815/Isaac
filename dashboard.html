@@ -515,6 +515,14 @@ textarea,input{font-size:16px;}
               <div class="helper">Wiederverwendbare Task-Pfade mit Zuverlässigkeit; fehlerhafte Verfahren sind markiert.</div>
               <div id="procedure-memory-view" class="tool-list" style="margin-top:1rem"></div>
             </div>
+            <div class="tool-card">
+              <h3>Forgetting / Decay</h3>
+              <div class="helper">Schwache Präferenzen, widersprochene Fakten und archiviertes Entwicklungswissen.</div>
+              <div class="tool-actions" style="margin:.6rem 0 .8rem 0">
+                <button class="hbtn" onclick="runDecayCycle()">Decay ausführen</button>
+              </div>
+              <div id="decay-status-view" class="tool-list" style="margin-top:.5rem"></div>
+            </div>
           </div>
         </div>
       </div>
@@ -633,6 +641,7 @@ const state = {
     selfModel: null,
     development: [],
     procedures: [],
+    decay: null,
     prevBlocks: null,
     currentBlocks: null,
   },
@@ -2062,6 +2071,41 @@ function blockKey(block) {
   return `${block.block_type || 'block'}:${block.key || block.content || ''}`;
 }
 
+function renderDecayStatusView(payload) {
+  const box = document.getElementById('decay-status-view');
+  if (!box) return;
+  const stats = payload?.stats || {};
+  const last = payload?.last_run || {};
+  const archived = payload?.archived_recent || [];
+  box.innerHTML = `
+    <div class="tool-mini">
+      <div class="tool-meta">
+        <span>aktiv: ${stats.development_active ?? '–'}</span>
+        <span>archiv: ${stats.development_archived ?? '–'}</span>
+        <span>schwache Fakten: ${stats.weak_facts ?? '–'}</span>
+      </div>
+      <div class="helper" style="margin-top:.35rem">Letzter Lauf: ${escHtml(last.ts || '–')}
+        · prefs ${last.preference_facts_decayed ?? 0}
+        · values ${last.values_decayed ?? 0}
+        · archiviert ${last.development_events_archived ?? 0}</div>
+    </div>
+    ${archived.length ? archived.slice(0, 8).map(ev => `
+      <div class="tool-mini"><span class="tool-meta">${escHtml(ev.archived_at || '')}</span>
+        <div class="helper">${escHtml(ev.target_kind || '')} · ${escHtml(ev.target_key || '')} · ${escHtml(ev.reason || ev.event_type || '')}</div>
+      </div>`).join('') : '<div class="helper">Noch keine archivierten Events.</div>'}`;
+}
+
+async function runDecayCycle() {
+  try {
+    const result = await fetchJson('/api/governance/decay', { method: 'POST' });
+    state.governance.decay = result;
+    renderDecayStatusView(result);
+    addSysMsg('Decay-Zyklus ausgeführt.');
+  } catch (err) {
+    addSysMsg('Decay fehlgeschlagen: ' + err.message);
+  }
+}
+
 function renderProcedureMemoryView(payload) {
   const box = document.getElementById('procedure-memory-view');
   if (!box) return;
@@ -2122,24 +2166,27 @@ function renderMemoryBlocksView(payload) {
 
 async function refreshGovernance() {
   try {
-    const [constitution, selfModel, development, blocks, procedures] = await Promise.all([
+    const [constitution, selfModel, development, blocks, procedures, decay] = await Promise.all([
       fetchJson('/api/governance/constitution'),
       fetchJson('/api/governance/self-model'),
       fetchJson('/api/governance/development?limit=40'),
       fetchJson('/api/governance/memory-blocks?limit=40'),
       fetchJson('/api/governance/procedures?limit=40'),
+      fetchJson('/api/governance/decay'),
     ]);
     state.governance.prevBlocks = state.governance.currentBlocks;
     state.governance.constitution = constitution;
     state.governance.selfModel = selfModel;
     state.governance.development = development;
     state.governance.procedures = procedures;
+    state.governance.decay = decay;
     state.governance.currentBlocks = blocks;
     renderConstitutionInspector(constitution);
     renderSelfModelInspector(selfModel);
     renderDevelopmentTimeline(development);
     renderMemoryBlocksView(blocks);
     renderProcedureMemoryView(procedures);
+    renderDecayStatusView(decay);
     const ver = constitution?.summary?.version || constitution?.constitution?.version;
     if (ver) {
       updateBadge('tab-governance', ver);

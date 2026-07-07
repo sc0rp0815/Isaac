@@ -901,6 +901,73 @@ class TestHermesCompatibilityLayer(unittest.TestCase):
         self.assertIn("division by zero", mcp_result["error"])
 
 
+class TestForgettingDecay(unittest.TestCase):
+    def test_contradicted_fact_degrades_confidence(self):
+        from memory import get_memory
+
+        mem = get_memory()
+        key = f"pref_contradict_{id(self)}"
+        mem.set_fact(key, "alpha", source="inferred", confidence=0.7)
+        mem.set_fact(key, "beta", source="inferred", confidence=0.7)
+        record = mem.get_fact_record(key)
+        self.assertIsNotNone(record)
+        self.assertLess(float(record["confidence"]), 0.7)
+
+    def test_owner_correction_keeps_high_confidence(self):
+        from memory import get_memory
+
+        mem = get_memory()
+        key = f"pref_owner_{id(self)}"
+        mem.set_fact(key, "alpha", source="inferred", confidence=0.4)
+        mem.set_fact(key, "beta", source="Steffen", confidence=1.0)
+        record = mem.get_fact_record(key)
+        self.assertEqual(float(record["confidence"]), 1.0)
+
+    def test_old_development_events_are_archived(self):
+        from memory import get_memory, _conn
+
+        mem = get_memory()
+        event_id = mem.log_development_event(
+            event_type="test_archive",
+            target_kind="test",
+            target_key=f"archive_{id(self)}",
+            reason="archive regression",
+        )
+        with _conn() as con:
+            con.execute(
+                "UPDATE development_events SET ts=? WHERE id=?",
+                ("2018-01-01 00:00:00", event_id),
+            )
+        for i in range(8):
+            mem.log_development_event(
+                event_type="filler",
+                target_kind="test",
+                target_key=f"filler_{id(self)}_{i}",
+                reason="archive filler",
+            )
+        archived = mem.archive_development_events(older_than_days=30, keep_recent=5)
+        self.assertGreaterEqual(archived, 1)
+        archived_rows = mem.recent_archived_development_events(30)
+        self.assertTrue(any(int(r["id"]) == event_id for r in archived_rows))
+
+    def test_weak_preference_decays_when_old(self):
+        from forgetting_decay import decay_weak_preference_facts
+        from memory import get_memory, _conn
+
+        mem = get_memory()
+        key = f"chat_pref_{id(self)}"
+        mem.set_fact(key, "kurz", source="inferred", confidence=0.5)
+        with _conn() as con:
+            con.execute(
+                "UPDATE facts SET updated=? WHERE key=?",
+                ("2019-05-01 00:00:00", key),
+            )
+        changes = decay_weak_preference_facts(mem)
+        self.assertTrue(any(c["key"] == key for c in changes))
+        record = mem.get_fact_record(key)
+        self.assertLess(float(record["confidence"]), 0.5)
+
+
 class TestProcedureMemory(unittest.TestCase):
     def test_procedure_capture_success_and_failure_downgrade(self):
         from procedure_memory import record_task_outcome, build_signature
