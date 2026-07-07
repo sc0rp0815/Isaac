@@ -464,31 +464,37 @@ class IsaacKernel:
         return antwort, score
 
     # ── Post-Processing ────────────────────────────────────────────────────────
-    def _update_self_model_from_interaction(self, user_input: str, antwort: str, emp) -> None:
-        sm = get_self_model()
-        classification = classify_interaction_result(user_input)
-        interaction_class = classification.interaction_class
+    def _update_self_model_from_interaction(
+        self,
+        user_input: str,
+        antwort: str,
+        emp,
+        *,
+        interaction_class: str = "",
+        score: float = 0.0,
+    ) -> None:
+        from self_model_hooks import process_interaction
 
-        if interaction_class == InteractionClass.SOCIAL_ACKNOWLEDGMENT:
-            sm.note_owner_feedback(user_input[:500])
-            sm.apply_relationship_delta("owner_trust", 0.02, "positive acknowledgment")
-
-        if interaction_class == InteractionClass.NORMAL_CHAT:
-            words = [w.strip(".,!?") for w in user_input.split() if len(w.strip(".,!?")) > 4]
-            if len(words) >= 2:
-                sm.add_shared_theme(" ".join(words[:3])[:80])
-
-        if emp and getattr(emp, "node", None):
-            zustand = str(getattr(emp.node, "zustand", "") or "").lower()
-            if any(token in zustand for token in ("frustriert", "verärgert", "enttäuscht")):
-                sm.note_owner_feedback(user_input[:500])
+        process_interaction(
+            user_input=user_input,
+            antwort=antwort,
+            emp=emp,
+            interaction_class=interaction_class,
+            score=score,
+        )
 
     def _post_process(self, user_input: str, antwort: str, emp,
                       score: float, t0: float) -> str:
         dauer = round(time.monotonic() - t0, 2)
 
         try:
-            self._update_self_model_from_interaction(user_input, antwort, emp)
+            self._update_self_model_from_interaction(
+                user_input,
+                antwort,
+                emp,
+                interaction_class=classify_interaction_result(user_input).interaction_class.value,
+                score=score,
+            )
         except Exception as exc:
             log.debug("SelfModel update skipped: %s", exc)
 
@@ -854,12 +860,15 @@ class IsaacKernel:
     def _retrieve_relevant_context(
         self, user_input: str, intent: str, interaction_class: str
     ) -> dict[str, Any]:
-        return self.memory.build_retrieval_context(
+        from self_model_hooks import enrich_retrieval_with_self_model
+
+        retrieval_ctx = self.memory.build_retrieval_context(
             user_input=user_input,
             intent=intent,
             interaction_class=interaction_class,
             n_history=6,
         ).as_dict()
+        return enrich_retrieval_with_self_model(retrieval_ctx)
 
     def _select_response_strategy(
         self, user_input: str, intent: str, interaction_class: str, retrieval_ctx: dict[str, Any]

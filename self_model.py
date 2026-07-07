@@ -133,12 +133,148 @@ class SelfModel:
         self._save(self.data)
         AuditLog.action("SelfModel", "update_preference", f"{key} via {source}")
 
+    def sync_constitutional_state(self) -> None:
+        try:
+            from constitution import get_constitution
+
+            version = get_constitution().version()
+            state = self.data.setdefault("constitutional_state", {})
+            if state.get("constitution_version") != version:
+                state["constitution_version"] = version
+                self._save(self.data)
+        except Exception as exc:
+            log.debug("Constitution sync skipped: %s", exc)
+
+    def record_owner_preference(
+        self,
+        key: str,
+        value: Any,
+        confidence: float = 0.7,
+        source: str = "owner_feedback",
+        evidence: str = "",
+    ) -> dict[str, Any]:
+        prefs = self.data.setdefault("preference_state", {})
+        bucket = "avoid" if key == "avoid" else "owner_prefers"
+        items = prefs.setdefault(bucket, [])
+        if items and isinstance(items[0], str):
+            items[:] = [{"key": "legacy", "value": v, "confidence": 0.5, "confirmations": 1} for v in items]
+
+        normalized_key = (key or "preference").strip()[:80]
+        normalized_value = str(value).strip()[:180]
+        ts = time.strftime("%Y-%m-%d %H:%M:%S")
+        existing = next(
+            (item for item in items if item.get("key") == normalized_key and item.get("value") == normalized_value),
+            None,
+        )
+        if existing:
+            existing["confidence"] = min(1.0, float(existing.get("confidence", 0.5)) + 0.08)
+            existing["confirmations"] = int(existing.get("confirmations", 1)) + 1
+            existing["updated"] = ts
+            existing["source"] = source
+        else:
+            existing = {
+                "key": normalized_key,
+                "value": normalized_value,
+                "confidence": max(0.05, min(1.0, float(confidence))),
+                "confirmations": 1,
+                "source": source,
+                "evidence": evidence[:200],
+                "updated": ts,
+            }
+            items.append(existing)
+        items.sort(key=lambda item: float(item.get("confidence", 0.0)), reverse=True)
+        del items[20:]
+        self._save(self.data)
+        AuditLog.action("SelfModel", "record_preference", f"{bucket}:{normalized_key}")
+        try:
+            from memory import get_memory
+
+            get_memory().log_development_event(
+                event_type="preference_recorded",
+                target_kind="self_model",
+                target_key=normalized_key,
+                delta=0.0,
+                confidence_before=0.0,
+                confidence_after=float(existing.get("confidence", confidence)),
+                evidence_refs=[evidence[:120]] if evidence else [],
+                reason=f"{source}: {normalized_value[:120]}",
+                metadata={"bucket": bucket, "source": source},
+            )
+        except Exception as exc:
+            log.debug("Preference development-log: %s", exc)
+        return existing
+
+    def reinforce_recent_preferences(self, boost: float = 0.05, reason: str = "") -> int:
+        prefs = self.data.setdefault("preference_state", {})
+        updated = 0
+        for bucket in ("owner_prefers", "avoid"):
+            for item in prefs.get(bucket, [])[-5:]:
+                if not isinstance(item, dict):
+                    continue
+                before = float(item.get("confidence", 0.5))
+                item["confidence"] = min(1.0, before + float(boost))
+                item["confirmations"] = int(item.get("confirmations", 1)) + 1
+                updated += 1
+        if updated:
+            self._save(self.data)
+            AuditLog.development("preference_reinforced", "self_model", "recent", boost, reason)
+        return updated
+
+    def relevant_preferences(self, limit: int = 4, min_confidence: float = 0.55) -> list[dict[str, Any]]:
+        prefs = self.data.get("preference_state", {})
+        collected: list[dict[str, Any]] = []
+        response_style = prefs.get("response_style")
+        if response_style:
+            collected.append({
+                "key": "response_style",
+                "value": response_style,
+                "confidence": 0.8,
+                "source": "self_model",
+            })
+        for bucket in ("owner_prefers", "avoid"):
+            for item in prefs.get(bucket, []):
+                if isinstance(item, str):
+                    collected.append({"key": bucket, "value": item, "confidence": 0.5, "source": "legacy"})
+                    continue
+                conf = float(item.get("confidence", 0.0))
+                if conf < min_confidence:
+                    continue
+                collected.append({
+                    "key": item.get("key", bucket),
+                    "value": item.get("value", ""),
+                    "confidence": conf,
+                    "source": item.get("source", "self_model"),
+                    "confirmations": item.get("confirmations", 1),
+                })
+        collected.sort(key=lambda item: float(item.get("confidence", 0.0)), reverse=True)
+        return collected[: max(1, int(limit))]
+
     def add_shared_theme(self, theme: str):
+        self.track_shared_theme(theme)
+
+    def track_shared_theme(self, theme: str) -> dict[str, Any] | None:
+        theme = (theme or "").strip()[:80]
+        if not theme:
+            return None
         rel = self.data.setdefault("relationship_state", {})
         themes = rel.setdefault("shared_themes", [])
-        if theme not in themes:
-            themes.append(theme)
-            self._save(self.data)
+        if themes and isinstance(themes[0], str):
+            themes[:] = [{"theme": t, "count": 1, "last_seen": time.strftime("%Y-%m-%d %H:%M:%S")} for t in themes]
+
+        ts = time.strftime("%Y-%m-%d %H:%M:%S")
+        existing = next((item for item in themes if item.get("theme") == theme), None)
+        if existing:
+            existing["count"] = int(existing.get("count", 1)) + 1
+            existing["last_seen"] = ts
+        else:
+            existing = {"theme": theme, "count": 1, "last_seen": ts}
+            themes.append(existing)
+        themes.sort(key=lambda item: int(item.get("count", 0)), reverse=True)
+        del themes[12:]
+        self._save(self.data)
+        if int(existing.get("count", 0)) >= 2:
+            return existing
+        return None
 
     def apply_relationship_delta(self, key: str, delta: float, reason: str = ''):
         rel = self.data.setdefault('relationship_state', {})
@@ -162,6 +298,15 @@ class SelfModel:
         if text not in arr:
             arr.append(text[:300])
             self._save(self.data)
+
+    def bump_maturity(self, delta: float = 0.01) -> float:
+        dev = self.data.setdefault("development_state", {})
+        before = float(dev.get("maturity", 0.0) or 0.0)
+        after = max(0.0, min(1.0, before + float(delta)))
+        dev["maturity"] = after
+        dev["last_reflection"] = time.strftime("%Y-%m-%d %H:%M:%S")
+        self._save(self.data)
+        return after
 
 
 _model: Optional[SelfModel] = None

@@ -2047,6 +2047,7 @@ function renderSelfModelInspector(payload) {
     </div>
     <div class="tool-mini"><div class="tool-meta"><span>Owner-Trust: ${Number(rel.owner_trust || 0).toFixed(2)}</span><span>Themen: ${(rel.shared_themes || []).length}</span></div>
       <div class="helper" style="margin-top:.35rem">${escHtml(rel.last_owner_feedback || 'Kein letztes Feedback')}</div>
+      <div class="helper" style="margin-top:.35rem">Themen: ${(rel.shared_themes || []).slice(0,4).map(t => escHtml(typeof t === 'string' ? t : (t.theme || ''))).join(', ') || '–'}</div>
     </div>`;
 }
 

@@ -901,6 +901,65 @@ class TestHermesCompatibilityLayer(unittest.TestCase):
         self.assertIn("division by zero", mcp_result["error"])
 
 
+class TestSelfModelHooks(unittest.TestCase):
+    def test_preference_extracted_from_owner_statement(self):
+        from self_model_hooks import process_interaction
+        from self_model import get_self_model
+
+        updates = process_interaction(
+            user_input="Ich bevorzuge kurze nüchterne Antworten",
+            interaction_class="NORMAL_CHAT",
+            score=7.0,
+        )
+        self.assertTrue(updates.get("preferences"))
+        prefs = get_self_model().relevant_preferences(limit=5)
+        self.assertTrue(any(p.get("key") in ("prefer", "response_style") for p in prefs))
+
+    def test_correction_records_high_confidence_preference(self):
+        from self_model_hooks import process_interaction
+        from self_model import get_self_model
+
+        key = f"answer_style_{id(self)}"
+        process_interaction(
+            user_input=f"korrektur: {key} = kurz und direkt",
+            interaction_class="NORMAL_CHAT",
+            score=7.0,
+        )
+        prefs = get_self_model().relevant_preferences(limit=10)
+        self.assertTrue(any(p.get("key") == key and p.get("confidence", 0) >= 0.9 for p in prefs))
+
+    def test_shared_theme_requires_recurrence(self):
+        from self_model_hooks import process_interaction
+
+        theme_text = "routing executor klassifikation stabil"
+        first = process_interaction(
+            user_input=theme_text,
+            interaction_class="NORMAL_CHAT",
+            score=6.0,
+        )
+        self.assertEqual(first.get("themes"), [])
+        second = process_interaction(
+            user_input=theme_text,
+            interaction_class="NORMAL_CHAT",
+            score=6.0,
+        )
+        self.assertEqual(len(second.get("themes", [])), 1)
+
+    def test_retrieval_enriched_with_self_model_preferences(self):
+        from self_model_hooks import enrich_retrieval_with_self_model
+        from self_model import get_self_model
+
+        get_self_model().record_owner_preference(
+            key="test_pref",
+            value="knapp antworten",
+            confidence=0.8,
+            source="test",
+        )
+        enriched = enrich_retrieval_with_self_model({"preferences_context": []})
+        self.assertTrue(enriched.get("self_model_preferences"))
+        self.assertTrue(enriched.get("preferences_context"))
+
+
 class TestConstitutionOwnerOverride(unittest.TestCase):
     def test_privilege_escalation_blocked_without_override(self):
         from constitution import get_constitution
