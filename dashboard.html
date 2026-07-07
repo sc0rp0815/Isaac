@@ -80,7 +80,21 @@ textarea,input{font-size:16px;}
 .tab-content{display:none;min-height:0;overflow:hidden;}
 .tab-content.active{display:block;height:100%;}
 #tm-container,#log-container,#directives-list{height:100%;overflow:auto;padding-right:4px;}
-#tab-providers{height:100%;overflow:auto;padding-right:4px;}
+#tab-providers,#tab-governance{height:100%;overflow:auto;padding-right:4px;}
+.trace-step{padding:.45rem .65rem;border-left:2px solid var(--line2);margin:.2rem 0 .35rem .35rem;font-size:.78rem;background:rgba(8,13,23,.55);border-radius:0 10px 10px 0;}
+.trace-step.eligibility{border-color:var(--cyan);}
+.trace-step.selection{border-color:var(--purple);}
+.trace-step.execution{border-color:var(--yellow);}
+.trace-step.context_integration{border-color:var(--green);}
+.trace-step.followup{border-color:var(--orange);}
+.trace-meta{color:var(--dim);font-size:.68rem;font-family:'JetBrains Mono',monospace;}
+.memory-diff-added{color:var(--green);}
+.memory-diff-removed{color:var(--red);}
+.memory-diff-changed{color:var(--yellow);}
+.principle-row{padding:.55rem .65rem;border-radius:10px;border:1px solid var(--line);background:rgba(8,13,23,.55);margin-bottom:.45rem;}
+.principle-row strong{display:block;margin-bottom:.2rem;}
+.dev-event-row{display:grid;grid-template-columns:110px 90px 1fr 70px;gap:8px;padding:.45rem 0;border-bottom:1px solid rgba(49,67,102,.25);font-size:.78rem;}
+.dev-event-row:last-child{border-bottom:none;}
 #providers-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;align-content:start;}
 .provider-card{padding:14px;border-radius:16px;border:1px solid var(--line);background:rgba(10,15,26,.78);display:grid;gap:8px;}
 .provider-card.primary{outline:1px solid rgba(72,199,255,.35);box-shadow:0 0 0 1px rgba(72,199,255,.12) inset;}
@@ -313,6 +327,7 @@ textarea,input{font-size:16px;}
       <button class="tab" onclick="showTab('directives')">Direktiven <span class="tab-badge" id="tab-dir">0</span></button>
       <button class="tab" onclick="showTab('tools')">Tools <span class="tab-badge" id="tab-tools">0</span></button>
       <button class="tab" onclick="showTab('neural')">Neural <span class="tab-badge" id="tab-neural">🧠</span></button>
+      <button class="tab" onclick="showTab('governance')">Governance <span class="tab-badge" id="tab-governance">⚖</span></button>
       <button class="tab" onclick="showTab('updater')">Updater <span class="tab-badge" id="tab-updater">⇪</span></button>
     </div>
 
@@ -464,6 +479,41 @@ textarea,input{font-size:16px;}
         </div>
       </div>
 
+      <div class="tab-content" id="tab-governance">
+        <div class="tool-section">
+          <div class="section-title">
+            <h2>Governance & Gedächtnis</h2>
+            <span class="tab-badge" id="governance-version-badge">v–</span>
+          </div>
+          <div class="tool-actions" style="margin-bottom:.75rem">
+            <button class="hbtn" onclick="refreshGovernance()">Neu laden</button>
+          </div>
+          <div class="tool-grid">
+            <div class="tool-card">
+              <h3>Constitution Inspector</h3>
+              <div class="helper">Verfassungsprinzipien, Version und harte Constraints.</div>
+              <div id="constitution-inspector" class="tool-list" style="margin-top:1rem"></div>
+            </div>
+            <div class="tool-card">
+              <h3>Self-Model</h3>
+              <div class="helper">Phase, Reifegrad und Beziehungszustand.</div>
+              <div id="self-model-inspector" class="tool-list" style="margin-top:1rem"></div>
+            </div>
+            <div class="tool-card">
+              <h3>Development Timeline</h3>
+              <div class="helper">Gebundene Lern- und Wertänderungen aus dem Entwicklungslog.</div>
+              <div id="development-timeline" class="tool-list" style="margin-top:1rem"></div>
+            </div>
+            <div class="tool-card">
+              <h3>Memory Blocks & Diff</h3>
+              <div class="helper">Strukturierte Blöcke (Fakten, Direktiven, Entwicklung) mit Diff zur letzten Ansicht.</div>
+              <div id="memory-blocks-view" class="tool-list" style="margin-top:1rem"></div>
+              <div id="memory-diff-view" class="tool-list" style="margin-top:.75rem"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div class="tab-content" id="tab-updater">
         <div class="tool-section">
           <div class="section-title"><h2>Updater</h2><span class="tab-badge" id="updater-package-count">0</span></div>
@@ -573,6 +623,13 @@ const state = {
   mcpData: { capabilities: {}, tools: [], resources: [] },
   runtimeSettings: {},
   updater: { packages: [], status: null, inspect: null, selected: null },
+  governance: {
+    constitution: null,
+    selfModel: null,
+    development: [],
+    prevBlocks: null,
+    currentBlocks: null,
+  },
 };
 
 // ═══════════════════════════════════════════════════════════════
@@ -871,6 +928,12 @@ function updateState(s) {
 
   if (s.neural) renderNeuralCore(s.neural);
 
+  if (s.governance) {
+    const gv = s.governance.constitution_version || '–';
+    updateBadge('tab-governance', gv);
+    setText('governance-version-badge', `v${gv}`);
+  }
+
   if (s.audit) {
     setText('a-total', s.audit.total_buffer);
     setText('a-size',  s.audit.audit_file_kb + ' KB');
@@ -1029,6 +1092,8 @@ function buildTaskRow(task) {
           <div class="detail-label">Sub-Tasks / Modus</div>
           <div class="detail-value">${task.sub_tasks} Sub-Tasks | Followup: ${task.followup_mode || '–'}</div>
         </div>
+        ${buildDecisionTrace(task)}
+        ${buildCheckpointPanel(task)}
         <div class="detail-block full">
           <div class="detail-label">Live-Log</div>
           <div class="task-log">${(task.log || []).map(e =>
@@ -1047,6 +1112,64 @@ function buildTaskRow(task) {
     </div>
   `;
   return row;
+}
+
+function buildDecisionTrace(task) {
+  const trace = Array.isArray(task.decision_trace) ? task.decision_trace : [];
+  if (!trace.length) {
+    return `<div class="detail-block full">
+      <div class="detail-label">Decision Trace</div>
+      <div class="detail-value">Kein Trace für diesen Task.</div>
+    </div>`;
+  }
+  const steps = trace.map((entry, idx) => {
+    const phase = String(entry.phase || 'unknown').toLowerCase();
+    const event = escHtml(entry.event || '–');
+    const data = entry.data ? escHtml(JSON.stringify(entry.data).slice(0, 220)) : '';
+    return `<div class="trace-step ${phase}">
+      <strong>${idx + 1}. ${escHtml(phase)} · ${event}</strong>
+      ${data ? `<div class="trace-meta">${data}</div>` : ''}
+    </div>`;
+  }).join('');
+  return `<div class="detail-block full">
+    <div class="detail-label">Decision Trace (${trace.length})</div>
+    <div>${steps}</div>
+  </div>`;
+}
+
+function buildCheckpointPanel(task) {
+  const cpState = task.checkpoint_state || '';
+  const cpTs = task.checkpoint_ts || '';
+  const resumeId = task.resume_checkpoint_id || 0;
+  if (!cpState && !resumeId) return '';
+  return `<div class="detail-block">
+    <div class="detail-label">Checkpoint</div>
+    <div class="detail-value">
+      ${escHtml(cpState || '–')}
+      ${cpTs ? ` · ${escHtml(cpTs)}` : ''}
+      ${resumeId ? ` · Resume #${resumeId}` : ''}
+      <button class="hbtn" style="margin-left:.5rem;padding:.25rem .5rem;font-size:.7rem"
+        onclick="loadTaskCheckpoints('${task.id}', this)">Checkpoints laden</button>
+    </div>
+    <div class="task-log" id="cp-${task.id}" style="margin-top:.4rem;max-height:120px"></div>
+  </div>`;
+}
+
+async function loadTaskCheckpoints(taskId, btn) {
+  if (btn) btn.disabled = true;
+  try {
+    const data = await fetchJson(`/api/tasks/checkpoints?task_id=${encodeURIComponent(taskId)}`);
+    const box = document.getElementById('cp-' + taskId);
+    if (!box) return;
+    const rows = (data.checkpoints || []).map(cp =>
+      `<div class="task-log-entry"><span class="tl-ts">${escHtml(cp.state_name || '')}</span>${escHtml(cp.ts || '')}</div>`
+    ).join('');
+    box.innerHTML = rows || '<div class="helper">Keine Checkpoints.</div>';
+  } catch (err) {
+    addSysMsg('Checkpoint-Laden fehlgeschlagen: ' + err.message);
+  } finally {
+    if (btn) btn.disabled = false;
+  }
 }
 
 function buildScoreBars(task) {
@@ -1862,12 +1985,136 @@ const CONFIG = { owner: 'Steffen' };
 
 function showTab(name) {
   document.querySelectorAll('.tab').forEach((t, i) => {
-    const names = ['taskmanager', 'log', 'providers', 'directives', 'tools', 'neural', 'updater'];
+    const names = ['taskmanager', 'log', 'providers', 'directives', 'tools', 'neural', 'governance', 'updater'];
     t.classList.toggle('active', names[i] === name);
   });
   document.querySelectorAll('.tab-content').forEach(c => {
     c.classList.toggle('active', c.id === 'tab-' + name);
   });
+  if (name === 'governance') refreshGovernance();
+}
+
+function renderConstitutionInspector(payload) {
+  const box = document.getElementById('constitution-inspector');
+  if (!box) return;
+  if (!payload?.ok) {
+    box.innerHTML = '<div class="helper">Verfassung nicht verfügbar.</div>';
+    return;
+  }
+  const summary = payload.summary || {};
+  const principles = (payload.constitution?.principles || []).slice().sort(
+    (a, b) => (b.priority || 0) - (a.priority || 0)
+  );
+  const head = `<div class="tool-mini"><strong>Version ${escHtml(summary.version || payload.constitution?.version || '–')}</strong>
+    <div class="tool-meta"><span>${summary.immutable_count || 0} immutable</span><span>${summary.principle_count || principles.length} Prinzipien</span></div></div>`;
+  const rows = principles.map(p => `
+    <div class="principle-row">
+      <strong>${escHtml(p.title || p.id || 'Prinzip')}</strong>
+      <div class="helper">${escHtml(p.description || '')}</div>
+      <div class="trace-meta">prio ${p.priority || 0} · ${escHtml((p.tags || []).join(', '))}</div>
+    </div>`).join('');
+  box.innerHTML = head + rows;
+}
+
+function renderSelfModelInspector(payload) {
+  const box = document.getElementById('self-model-inspector');
+  if (!box) return;
+  if (!payload?.ok) {
+    box.innerHTML = '<div class="helper">Self-Model nicht verfügbar.</div>';
+    return;
+  }
+  const sm = payload.self_model || {};
+  const rel = sm.relationship_state || {};
+  const dev = sm.development_state || {};
+  box.innerHTML = `
+    <div class="tool-mini"><strong>${escHtml(sm.identity_core?.name || 'Isaac')}</strong>
+      <div class="tool-meta"><span>Phase: ${escHtml(dev.phase || '–')}</span><span>Reife: ${Number(dev.maturity || 0).toFixed(2)}</span></div>
+    </div>
+    <div class="tool-mini"><div class="tool-meta"><span>Owner-Trust: ${Number(rel.owner_trust || 0).toFixed(2)}</span><span>Themen: ${(rel.shared_themes || []).length}</span></div>
+      <div class="helper" style="margin-top:.35rem">${escHtml(rel.last_owner_feedback || 'Kein letztes Feedback')}</div>
+    </div>`;
+}
+
+function renderDevelopmentTimeline(payload) {
+  const box = document.getElementById('development-timeline');
+  if (!box) return;
+  const events = payload?.events || [];
+  if (!events.length) {
+    box.innerHTML = '<div class="helper">Noch keine Entwicklungs-Events.</div>';
+    return;
+  }
+  box.innerHTML = events.map(ev => `
+    <div class="dev-event-row">
+      <span>${escHtml(ev.ts || '')}</span>
+      <span>${escHtml(ev.target_kind || '')}</span>
+      <span>${escHtml(ev.target_key || '')} · ${escHtml(ev.reason || ev.event_type || '')}</span>
+      <span>${Number(ev.delta || 0).toFixed(3)}</span>
+    </div>`).join('');
+}
+
+function blockKey(block) {
+  return `${block.block_type || 'block'}:${block.key || block.content || ''}`;
+}
+
+function renderMemoryBlocksView(payload) {
+  const box = document.getElementById('memory-blocks-view');
+  const diffBox = document.getElementById('memory-diff-view');
+  if (!box || !diffBox) return;
+  const resource = payload?.resource || {};
+  const blocks = resource.blocks || [];
+  if (!blocks.length) {
+    box.innerHTML = '<div class="helper">Keine Memory-Blöcke.</div>';
+    diffBox.innerHTML = '';
+    return;
+  }
+  box.innerHTML = blocks.slice(0, 30).map(b => `
+    <div class="tool-mini"><strong>${escHtml(b.block_type || 'block')} · ${escHtml(b.key || '–')}</strong>
+      <div class="helper">${escHtml(String(b.content || '').slice(0, 160))}</div>
+    </div>`).join('');
+
+  const prev = state.governance.prevBlocks;
+  const currMap = new Map(blocks.map(b => [blockKey(b), b]));
+  const prevMap = prev ? new Map((prev.resource?.blocks || []).map(b => [blockKey(b), b])) : new Map();
+  const diffs = [];
+  currMap.forEach((block, key) => {
+    if (!prevMap.has(key)) diffs.push(`<div class="memory-diff-added">+ ${escHtml(key)}</div>`);
+    else if (JSON.stringify(prevMap.get(key)) !== JSON.stringify(block)) {
+      diffs.push(`<div class="memory-diff-changed">~ ${escHtml(key)}</div>`);
+    }
+  });
+  prevMap.forEach((block, key) => {
+    if (!currMap.has(key)) diffs.push(`<div class="memory-diff-removed">- ${escHtml(key)}</div>`);
+  });
+  diffBox.innerHTML = diffs.length
+    ? `<div class="detail-label">Memory Diff (vs. letzte Ansicht)</div>${diffs.join('')}`
+    : '<div class="helper">Kein Diff zur letzten Ansicht.</div>';
+}
+
+async function refreshGovernance() {
+  try {
+    const [constitution, selfModel, development, blocks] = await Promise.all([
+      fetchJson('/api/governance/constitution'),
+      fetchJson('/api/governance/self-model'),
+      fetchJson('/api/governance/development?limit=40'),
+      fetchJson('/api/governance/memory-blocks?limit=40'),
+    ]);
+    state.governance.prevBlocks = state.governance.currentBlocks;
+    state.governance.constitution = constitution;
+    state.governance.selfModel = selfModel;
+    state.governance.development = development;
+    state.governance.currentBlocks = blocks;
+    renderConstitutionInspector(constitution);
+    renderSelfModelInspector(selfModel);
+    renderDevelopmentTimeline(development);
+    renderMemoryBlocksView(blocks);
+    const ver = constitution?.summary?.version || constitution?.constitution?.version;
+    if (ver) {
+      updateBadge('tab-governance', ver);
+      setText('governance-version-badge', `v${ver}`);
+    }
+  } catch (err) {
+    addSysMsg('Governance-Daten konnten nicht geladen werden: ' + err.message);
+  }
 }
 
 function setOnline(online) {
@@ -1966,6 +2213,7 @@ refreshProvidersConfig();
 setInterval(refreshTools, 15000);
 setInterval(refreshRuntimeSettings, 15000);
 setInterval(refreshProvidersConfig, 15000);
+setInterval(refreshGovernance, 30000);
 
 
 

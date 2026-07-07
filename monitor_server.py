@@ -287,6 +287,18 @@ class MonitorServer:
         except Exception:
             pass
 
+        governance_status = {}
+        try:
+            from constitution import get_constitution
+            from self_model import get_self_model
+            governance_status = {
+                "constitution_version": get_constitution().version(),
+                "self_model_phase": get_self_model().summary().get("phase", "unknown"),
+                "development_recent": len(self.memory.recent_development_events(8)),
+            }
+        except Exception:
+            pass
+
         settings = {
             "owner_name": getattr(self.cfg, "owner_name", "Steffen"),
             "active_provider": getattr(getattr(self.cfg, "relay", None), "primary_provider", ""),
@@ -324,6 +336,7 @@ class MonitorServer:
             "watchdog":    watchdog_status,
             "blacklist":   blacklist_status,
             "neural":      neural_status,
+            "governance":  governance_status,
         }
 
     def _get_directives(self) -> list[dict]:
@@ -752,6 +765,49 @@ class DashboardHTTPServer:
             async def updater_status_api(request):
                 return web.json_response(updater_status())
 
+            async def governance_constitution(request):
+                from constitution import get_constitution
+                c = get_constitution()
+                return web.json_response({
+                    "ok": True,
+                    "constitution": c.export(),
+                    "summary": c.summary(),
+                    "context": c.as_context(),
+                })
+
+            async def governance_self_model(request):
+                from self_model import get_self_model
+                sm = get_self_model()
+                return web.json_response({
+                    "ok": True,
+                    "self_model": sm.snapshot(),
+                    "summary": sm.summary(),
+                })
+
+            async def governance_development(request):
+                from memory import get_memory
+                limit = max(1, min(int(request.rel_url.query.get("limit", "40")), 200))
+                return web.json_response({
+                    "ok": True,
+                    "events": get_memory().recent_development_events(limit),
+                })
+
+            async def governance_memory_blocks(request):
+                limit = max(1, min(int(request.rel_url.query.get("limit", "40")), 100))
+                result = mcp.read_resource("resource://memory/blocks", limit=limit)
+                return web.json_response(result, status=200 if result.get("ok") else 400)
+
+            async def task_checkpoints(request):
+                task_id = (request.rel_url.query.get("task_id") or "").strip()
+                if not task_id:
+                    return web.json_response({"ok": False, "error": "task_id fehlt"}, status=400)
+                from memory import get_memory
+                return web.json_response({
+                    "ok": True,
+                    "task_id": task_id,
+                    "checkpoints": get_memory().list_checkpoints(task_id, limit=25),
+                })
+
             async def monitor_state(request):
                 mon = get_monitor()
                 return web.json_response({
@@ -799,6 +855,11 @@ class DashboardHTTPServer:
             app.router.add_post("/api/mcp/prompts/get", mcp_get_prompt)
             app.router.add_get("/api/mcp/tools", mcp_tools)
             app.router.add_post("/api/mcp/tools/invoke", mcp_invoke_tool)
+            app.router.add_get("/api/governance/constitution", governance_constitution)
+            app.router.add_get("/api/governance/self-model", governance_self_model)
+            app.router.add_get("/api/governance/development", governance_development)
+            app.router.add_get("/api/governance/memory-blocks", governance_memory_blocks)
+            app.router.add_get("/api/tasks/checkpoints", task_checkpoints)
             app.router.add_get("/api/update/packages", updater_packages)
             app.router.add_post("/api/update/inspect", updater_inspect)
             app.router.add_post("/api/update/apply", updater_apply)
