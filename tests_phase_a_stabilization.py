@@ -901,6 +901,86 @@ class TestHermesCompatibilityLayer(unittest.TestCase):
         self.assertIn("division by zero", mcp_result["error"])
 
 
+class TestMcpJsonRpc(unittest.TestCase):
+    def setUp(self):
+        from mcp_jsonrpc import get_jsonrpc_handler
+        from mcp_registry import get_mcp_registry
+
+        self.handler = get_jsonrpc_handler(get_mcp_registry())
+
+    def _call(self, method: str, params: dict | None = None, req_id: int = 1) -> dict:
+        return self.handler.dispatch({
+            "jsonrpc": "2.0",
+            "id": req_id,
+            "method": method,
+            "params": params or {},
+        })
+
+    def test_jsonrpc_initialize(self):
+        resp = self._call(
+            "initialize",
+            {
+                "protocolVersion": "2024-11-05",
+                "capabilities": {},
+                "clientInfo": {"name": "test", "version": "1"},
+            },
+        )
+        self.assertEqual(resp.get("id"), 1)
+        self.assertIn("result", resp)
+        self.assertEqual(resp["result"].get("protocolVersion"), "2024-11-05")
+        self.assertEqual(resp["result"]["serverInfo"]["name"], "isaac")
+
+    def test_jsonrpc_tools_list_and_call(self):
+        self._call("initialize", {"protocolVersion": "2024-11-05", "capabilities": {}})
+        tools_resp = self._call("tools/list", req_id=2)
+        tools = tools_resp["result"]["tools"]
+        self.assertTrue(any(t.get("name") == "isaac.query_memory" for t in tools))
+
+        call_resp = self._call(
+            "tools/call",
+            {"name": "isaac.query_memory", "arguments": {"query": "status", "limit": 2}},
+            req_id=3,
+        )
+        self.assertIn("result", call_resp)
+        self.assertFalse(call_resp["result"].get("isError"))
+        self.assertTrue(call_resp["result"]["content"])
+
+    def test_jsonrpc_resources_read(self):
+        self._call("initialize", {"protocolVersion": "2024-11-05", "capabilities": {}})
+        resp = self._call(
+            "resources/read",
+            {"uri": "resource://constitution", "params": {}},
+            req_id=4,
+        )
+        self.assertIn("result", resp)
+        self.assertTrue(resp["result"]["contents"])
+        self.assertIn("constitution", resp["result"]["contents"][0]["text"])
+
+    def test_jsonrpc_unknown_method(self):
+        resp = self._call("does/not/exist", req_id=5)
+        self.assertIn("error", resp)
+        self.assertEqual(resp["error"]["code"], -32601)
+
+    def test_stdio_transport_ping(self):
+        import json
+        import subprocess
+        import sys
+
+        proc = subprocess.run(
+            [sys.executable, "mcp_server.py", "--stdio"],
+            input='{"jsonrpc":"2.0","id":9,"method":"ping","params":{}}\n',
+            capture_output=True,
+            text=True,
+            cwd=str(Path(__file__).resolve().parent),
+            timeout=10,
+        )
+        self.assertEqual(proc.returncode, 0)
+        line = proc.stdout.strip().splitlines()[-1]
+        data = json.loads(line)
+        self.assertEqual(data.get("id"), 9)
+        self.assertEqual(data.get("result"), {})
+
+
 class TestForgettingDecay(unittest.TestCase):
     def test_contradicted_fact_degrades_confidence(self):
         from memory import get_memory

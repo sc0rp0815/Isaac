@@ -714,6 +714,28 @@ class DashboardHTTPServer:
                 result = mcp.invoke_tool(name, args)
                 return web.json_response(result, status=200 if result.get("ok") else 400)
 
+            async def mcp_jsonrpc(request):
+                from mcp_jsonrpc import get_jsonrpc_handler
+
+                try:
+                    payload = await request.json()
+                except Exception:
+                    return web.json_response({
+                        "jsonrpc": "2.0",
+                        "id": None,
+                        "error": {"code": -32700, "message": "Parse error"},
+                    }, status=400)
+                try:
+                    result = get_jsonrpc_handler(mcp).handle_payload(payload)
+                except Exception as e:
+                    return web.json_response({
+                        "jsonrpc": "2.0",
+                        "id": None,
+                        "error": {"code": -32603, "message": str(e)},
+                    }, status=500)
+                status = 200
+                return web.json_response(result, status=status)
+
             async def updater_packages(request):
                 return web.json_response({"ok": True, "packages": list_packages()})
 
@@ -885,6 +907,7 @@ class DashboardHTTPServer:
             app.router.add_post("/api/mcp/prompts/get", mcp_get_prompt)
             app.router.add_get("/api/mcp/tools", mcp_tools)
             app.router.add_post("/api/mcp/tools/invoke", mcp_invoke_tool)
+            app.router.add_post("/api/mcp/jsonrpc", mcp_jsonrpc)
             app.router.add_get("/api/governance/constitution", governance_constitution)
             app.router.add_get("/api/governance/self-model", governance_self_model)
             app.router.add_get("/api/governance/development", governance_development)

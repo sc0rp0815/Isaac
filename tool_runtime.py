@@ -198,11 +198,13 @@ async def discover_mcp_bridge(client: MCPClient | None = None) -> dict:
         return {
             "ok": True,
             "source": "remote",
+            "transport": getattr(client, "transport", "rest"),
             "capabilities": capabilities.get("capabilities", capabilities),
             "tools": tools.get("tools", []),
             "resources": resources.get("resources", []),
             "prompts": prompts.get("prompts", []),
             "url": client.api_base,
+            "jsonrpc_url": getattr(client, "jsonrpc_url", ""),
         }
     except Exception as e:
         reg = get_mcp_registry()
@@ -238,6 +240,7 @@ async def list_live_tool_interfaces() -> dict:
             {"path": "/api/tools/delete", "method": "POST"},
             {"path": "/api/tools/suggest", "method": "POST"},
             {"path": "/api/mcp/capabilities", "method": "GET"},
+            {"path": "/api/mcp/jsonrpc", "method": "POST"},
             {"path": "/api/mcp/tools", "method": "GET"},
             {"path": "/api/mcp/resources", "method": "GET"},
             {"path": "/api/mcp/prompts", "method": "GET"},
