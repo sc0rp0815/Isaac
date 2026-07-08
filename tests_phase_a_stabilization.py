@@ -929,21 +929,38 @@ class TestSelfModelHooks(unittest.TestCase):
         self.assertTrue(any(p.get("key") == key and p.get("confidence", 0) >= 0.9 for p in prefs))
 
     def test_shared_theme_requires_recurrence(self):
-        from self_model_hooks import process_interaction
+        import self_model as self_model_module
+        import tempfile
+        from pathlib import Path
+        from self_model import SelfModel
+        from self_model_hooks import process_interaction, _extract_topic_theme
 
         theme_text = "routing executor klassifikation stabil"
-        first = process_interaction(
-            user_input=theme_text,
-            interaction_class="NORMAL_CHAT",
-            score=6.0,
-        )
-        self.assertEqual(first.get("themes"), [])
-        second = process_interaction(
-            user_input=theme_text,
-            interaction_class="NORMAL_CHAT",
-            score=6.0,
-        )
+        expected_theme = _extract_topic_theme(theme_text)
+        self.assertEqual(expected_theme, "routing executor klassifikation")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            isolated = SelfModel(path=Path(tmp) / "self_model.json")
+            previous = self_model_module._model
+            self_model_module._model = isolated
+            try:
+                first = process_interaction(
+                    user_input=theme_text,
+                    interaction_class="NORMAL_CHAT",
+                    score=6.0,
+                )
+                self.assertEqual(first.get("themes"), [])
+                second = process_interaction(
+                    user_input=theme_text,
+                    interaction_class="NORMAL_CHAT",
+                    score=6.0,
+                )
+            finally:
+                self_model_module._model = previous
+
         self.assertEqual(len(second.get("themes", [])), 1)
+        self.assertEqual(second["themes"][0].get("theme"), expected_theme)
+        self.assertEqual(second["themes"][0].get("count"), 2)
 
     def test_retrieval_enriched_with_self_model_preferences(self):
         from self_model_hooks import enrich_retrieval_with_self_model
