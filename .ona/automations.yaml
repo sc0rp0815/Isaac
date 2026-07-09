@@ -27,6 +27,7 @@ services:
         ona environment port open 8767 --dont-wait --admission creator_only --name "Isaac WebSocket"
         export MONITOR_PORT=8767
         export MONITOR_HTTP_PORT=8766
+        export OLLAMA_MODEL=qwen3.5:latest
         export ISAAC_DISABLE_VECTOR_MEMORY=1
         mkdir -p logs runtime workspace data
         if [ ! -x .venv/bin/python ]; then

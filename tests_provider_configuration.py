@@ -20,11 +20,11 @@ class TestProviderConfiguration(unittest.TestCase):
         config_module.RUNTIME_SETTINGS_PATH = self.old_runtime_path
         self.tmp.cleanup()
 
-    def test_default_provider_is_ollama_llama32(self):
+    def test_default_provider_is_ollama_qwen35(self):
         with patch.dict("os.environ", {}, clear=True):
             defaults = config_module._provider_defaults_from_env()
         self.assertIn("ollama", defaults)
-        self.assertEqual(defaults["ollama"].model, "llama3.2:latest")
+        self.assertEqual(defaults["ollama"].model, "qwen3.5:latest")
         self.assertEqual(defaults["ollama"].provider_type, "ollama")
 
     def test_upsert_default_keeps_single_default(self):
@@ -56,7 +56,7 @@ class TestProviderConfiguration(unittest.TestCase):
                 "display_name": "Backup Ollama",
                 "provider_type": "ollama",
                 "base_url": "http://127.0.0.1:11434/api/chat",
-                "model": "llama3.2:latest",
+                "model": "qwen3.5:latest",
                 "enabled": True,
                 "is_default": False,
                 "timeout": 120,
@@ -68,7 +68,7 @@ class TestProviderConfiguration(unittest.TestCase):
         reloaded = config_module.IsaacConfig()
         self.assertIn("backup-ollama", reloaded.providers)
         self.assertEqual(reloaded.providers["backup-ollama"].provider_type, "ollama")
-        self.assertEqual(reloaded.providers["backup-ollama"].model, "llama3.2:latest")
+        self.assertEqual(reloaded.providers["backup-ollama"].model, "qwen3.5:latest")
 
 
 if __name__ == "__main__":

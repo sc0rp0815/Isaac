@@ -18,7 +18,7 @@ chromadb>=0.4.0
 
 # Lokale Modelle (empfohlen)
 # Ollama separat installieren: https://ollama.ai
-# ollama pull llama3.2:latest
+# ollama pull qwen3.5:latest
 
 # Schnelle kostenlose API-Alternative:
 # GROQ_API_KEY in .env → https://console.groq.com (kostenlos)
