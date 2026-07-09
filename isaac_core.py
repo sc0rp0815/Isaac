@@ -55,6 +55,7 @@ from low_complexity import (
     is_low_complexity_local_input,
     local_class_response,
     local_fast_response,
+    normalize_low_complexity,
 )
 from neural_core   import get_neural_cortex
 from learning_engine import get_learning_engine
@@ -166,6 +167,7 @@ class IsaacKernel:
 
         set_kernel(self)
         self._sudo_token: Optional[str] = None
+        self._awaiting_frage_id: Optional[str] = None
 
         log.info(f"  Owner:      {self.cfg.owner_name}")
         log.info(f"  Provider:   {', '.join(self.cfg.available_providers)}")
@@ -188,6 +190,7 @@ class IsaacKernel:
         classification = classify_interaction_result(user_input)
         interaction_class = classification.interaction_class
         if is_lightweight_local_class(interaction_class):
+            self._awaiting_frage_id = None
             timing["classification_ms"] = round((time.perf_counter() - t_start) * 1000, 2)
             log.info("Latency(lightweight) | total=%sms input='%s'", timing["classification_ms"], user_input[:42])
             return local_class_response(interaction_class, user_input)
@@ -195,6 +198,25 @@ class IsaacKernel:
         timing["classification_ms"] = round((time.perf_counter() - t_start) * 1000, 2)
 
         t0 = time.monotonic()
+
+        if interaction_class in {
+            InteractionClass.STATUS_QUERY,
+            InteractionClass.TOOL_REQUEST,
+        }:
+            self._awaiting_frage_id = None
+        elif self._awaiting_frage_id and self._input_looks_like_frage_antwort(
+            user_input, interaction_class
+        ):
+            frage_id = self._awaiting_frage_id
+            antwort_text = user_input.strip()
+            if antwort_text.lower().startswith("antwort:"):
+                antwort_text = antwort_text.split(":", 1)[-1].strip()
+            self.regelwerk.beantworte_frage(frage_id, antwort_text)
+            self._persist_regelwerk_answer_to_memory(frage_id, antwort_text)
+            self._awaiting_frage_id = None
+            emp = self.empathie.analysiere(user_input)
+            antwort = self.regelwerk.build_answer_ack(frage_id, antwort_text)
+            return self._post_process(user_input, antwort, emp, 8.0, t0)
 
         # SUDO-Status
         sudo_aktiv = (
@@ -492,7 +514,7 @@ class IsaacKernel:
                 user_input,
                 antwort,
                 emp,
-                interaction_class=classify_interaction_result(user_input).interaction_class.value,
+                interaction_class=classify_interaction_result(user_input).interaction_class,
                 score=score,
             )
         except Exception as exc:
@@ -517,16 +539,68 @@ class IsaacKernel:
             antwort += f"\n\n*[Empathie] {emp.interface_fehler}*"
 
         # Erkenntnisse anhängen wenn relevant
-        if erkenntnisse and any("Pattern" in e or "Regel" in e
-                                for e in erkenntnisse):
-            antwort += "\n\n---\n*[Regelwerk] " + erkenntnisse[0] + "*"
+        def _erkenntnis_text(entry) -> str:
+            if isinstance(entry, str):
+                return entry
+            text = getattr(entry, "text", None)
+            return str(text) if text else str(entry)
+
+        if erkenntnisse and any(
+            "Pattern" in _erkenntnis_text(e) or "Regel" in _erkenntnis_text(e)
+            for e in erkenntnisse
+        ):
+            antwort += "\n\n---\n*[Regelwerk] " + _erkenntnis_text(erkenntnisse[0]) + "*"
 
         # Frage anhängen
         if frage:
+            top = self.regelwerk.get_top_pending_frage()
+            if top:
+                self._awaiting_frage_id = top.id
             antwort += f"\n\n---\n{frage}"
+        else:
+            self._awaiting_frage_id = None
 
         AuditLog.isaac_output(antwort)
         return antwort
+
+    def _persist_regelwerk_answer_to_memory(self, frage_id: str, antwort: str) -> None:
+        frage = self.regelwerk.get_frage(frage_id)
+        if not frage:
+            return
+        text = (antwort or "").strip()
+        if not text:
+            return
+        term = self.regelwerk._extract_term_from_frage(frage)
+        if term:
+            key = f"definition.{term.lower()}"
+            value = text[:500]
+        else:
+            key = f"regelwerk.answer.{frage_id}"
+            value = f"{frage.text[:120]} → {text[:380]}"
+        self.memory.set_fact(key, value, source="Steffen", confidence=1.0)
+
+    def _input_looks_like_frage_antwort(
+        self, user_input: str, interaction_class: str
+    ) -> bool:
+        if interaction_class in {
+            InteractionClass.SOCIAL_GREETING,
+            InteractionClass.SOCIAL_ACKNOWLEDGMENT,
+            InteractionClass.STATUS_QUERY,
+            InteractionClass.TOOL_REQUEST,
+        }:
+            return False
+        text = (user_input or "").strip()
+        if len(text) < 3:
+            return False
+        if text.lower().startswith("antwort:"):
+            return True
+        normalized = normalize_low_complexity(text)
+        if "?" in text and any(
+            normalized.startswith(prefix)
+            for prefix in ("was ", "wie ", "warum ", "wer ", "wann ", "wo ", "kannst ")
+        ):
+            return False
+        return len(normalized.split()) >= 2
 
     # ── SUDO ──────────────────────────────────────────────────────────────────
     def _handle_sudo_open(self, text: str) -> str:

@@ -1,7 +1,7 @@
 #!/data/data/com.termux/files/usr/bin/bash
 set -euo pipefail
 
-TARGET_DIR="${1:-/root/Isaac/isaac}"
+TARGET_DIR="${1:-$HOME/Isaac}"
 SRC_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 echo "[Isaac] Ziel: $TARGET_DIR"

@@ -521,6 +521,11 @@ class IsaacConfig:
         valid_default = requested if requested in self.providers else ""
 
         if not valid_default:
+            env_default = _normalize_provider_id(os.getenv("ACTIVE_PROVIDER", ""))
+            if env_default in self.providers:
+                valid_default = env_default
+
+        if not valid_default:
             for pid, cfg in self.providers.items():
                 if cfg.is_default:
                     valid_default = pid

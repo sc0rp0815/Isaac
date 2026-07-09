@@ -231,6 +231,138 @@ class TestCriticalBugs(unittest.TestCase):
         result = asyncio.run(kernel.process("Danke"))
         self.assertEqual(result, "Gern. Ich bin da.")
 
+    def test_bug_17_regelwerk_does_not_repeat_known_term_questions(self):
+        from regelwerk import Regelwerk
+
+        rw = object.__new__(Regelwerk)
+        rw._regeln = {}
+        rw._fragen = []
+        rw._history = []
+
+        first = rw._neue_frage(
+            "Was meinst du genau mit 'Status'? Für zukünftige Anfragen wichtig.",
+            "Unbekannter Begriff: Status",
+            0.5,
+        )
+        self.assertIsNotNone(first)
+
+        again = rw._neue_frage(
+            "Was meinst du genau mit 'Status'? Für zukünftige Anfragen wichtig.",
+            "Unbekannter Begriff: Status",
+            0.5,
+        )
+        self.assertIsNone(again)
+        self.assertTrue(rw._term_already_asked("Status"))
+        self.assertEqual(rw._erkenne_unbekannte_begriffe("Wie ist der System Status?"), "")
+
+    def test_bug_18_kernel_resolves_pending_regelwerk_answer(self):
+        from regelwerk import Frage
+
+        kernel = object.__new__(IsaacKernel)
+        frage = Frage(
+            id="F-test",
+            text="Was meinst du genau mit 'Status'? Für zukünftige Anfragen wichtig.",
+            kontext="test",
+            prioritaet=0.5,
+        )
+        saved_facts = []
+
+        kernel.regelwerk = SimpleNamespace(
+            beantworte_frage=lambda fid, text: setattr(frage, "beantwortet", True),
+            build_answer_ack=lambda fid, text: f"Verstanden: {text}",
+            analysiere=lambda *args, **kwargs: [],
+            get_pending_frage=lambda: None,
+            get_top_pending_frage=lambda: None,
+            get_frage=lambda fid: frage if fid == "F-test" else None,
+            _extract_term_from_frage=lambda f: "Status",
+        )
+        kernel.memory = SimpleNamespace(
+            set_fact=lambda key, value, **kwargs: saved_facts.append((key, value)) or True
+        )
+        kernel._background = None
+        kernel._awaiting_frage_id = "F-test"
+        kernel.empathie = SimpleNamespace(
+            analysiere=lambda text: SimpleNamespace(
+                node=SimpleNamespace(zustand="neutral"),
+                interface_fehler="",
+            )
+        )
+
+        result = asyncio.run(
+            kernel.process("Status meint bei mir den Systemzustand aller Module.")
+        )
+
+        self.assertIn("Verstanden", result)
+        self.assertTrue(frage.beantwortet)
+        self.assertIsNone(kernel._awaiting_frage_id)
+        self.assertEqual(saved_facts, [
+            ("definition.status", "Status meint bei mir den Systemzustand aller Module.")
+        ])
+
+    def test_bug_19_retrieval_surfaces_definition_facts(self):
+        import memory as memory_module
+        from memory import Memory
+
+        mem = object.__new__(Memory)
+        mem._vector = None
+        mem.get_directives = lambda: []
+        mem.get_working_memory = lambda n: []
+        mem.get_relevant_results = lambda query, limit=4: []
+        mem.search_procedures = lambda query, limit=3: []
+        mem.search_facts = lambda query, limit=8: []
+        mem.get_fact_record = lambda key: {
+            "key": key,
+            "value": "Systemzustand aller Module",
+            "confidence": 1.0,
+            "source": "Steffen",
+        } if key == "definition.status" else None
+
+        ctx = mem.build_retrieval_context(
+            "Wie ist der Status der Module?",
+            intent="chat",
+            interaction_class="NORMAL_CHAT",
+        )
+        facts = ctx.as_dict().get("relevant_facts", [])
+        self.assertTrue(any(f.get("key") == "definition.status" for f in facts))
+
+    def test_bug_16_post_process_accepts_frage_objects_from_background(self):
+        from regelwerk import Frage
+        from empathie import EmpathieResponse, NodeZustand
+
+        kernel = object.__new__(IsaacKernel)
+        kernel.regelwerk = SimpleNamespace(
+            analysiere=lambda *args, **kwargs: [],
+            get_pending_frage=lambda: None,
+        )
+        kernel._background = SimpleNamespace(
+            get_erkenntnisse=lambda: [
+                Frage(
+                    id="F1",
+                    text="Was meinst du genau mit 'Status'?",
+                    kontext="test",
+                    prioritaet=0.5,
+                )
+            ]
+        )
+        emp = EmpathieResponse(
+            node=NodeZustand(),
+            ton="standard",
+            anpassungs_hinweis="",
+            interface_fehler="",
+            low_res_aktiv=False,
+        )
+
+        result = kernel._post_process(
+            "Hallo Isaac. Laufen alle deine module?",
+            "Alle Module laufen.",
+            emp,
+            score=8.0,
+            t0=__import__("time").monotonic(),
+        )
+
+        self.assertIn("Alle Module laufen.", result)
+        self.assertNotIn("[Fehler]", result)
+
     def test_bug_13_translate_keyword_without_prefix_stays_chat(self):
         intent = self.kernel._resolve_intent_from_classification(
             "Kannst du das bitte übersetzen?",

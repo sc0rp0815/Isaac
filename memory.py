@@ -630,7 +630,20 @@ class Memory:
         facts = [
             f for f in (self.search_facts(query, limit=8) if query else [])
             if float(f.get("confidence") or 0.0) >= MIN_RETRIEVAL_CONFIDENCE
-        ][:6]
+        ]
+        seen_fact_keys = {f.get("key") for f in facts}
+        for term in {w for w in re.findall(r"\w+", user_input.lower()) if len(w) >= 3}:
+            def_key = f"definition.{term}"
+            if def_key in seen_fact_keys:
+                continue
+            record = self.get_fact_record(def_key)
+            if (
+                record
+                and float(record.get("confidence") or 0.0) >= MIN_RETRIEVAL_CONFIDENCE
+            ):
+                facts.append(record)
+                seen_fact_keys.add(def_key)
+        facts = facts[:6]
         relevant_results = self.get_relevant_results(query, limit=4) if query else []
         relevant_procedures = self.search_procedures(query, limit=3) if query else []
         history = self.get_working_memory(n_history)

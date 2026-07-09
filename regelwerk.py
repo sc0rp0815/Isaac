@@ -47,6 +47,13 @@ log = logging.getLogger("Isaac.Regelwerk")
 REGELWERK_PATH = DATA_DIR / "regelwerk.json"
 FRAGEN_PATH    = DATA_DIR / "offene_fragen.json"
 
+# Häufige Systembegriffe — keine Rückfragen dazu generieren
+_KNOWN_SYSTEM_TERMS = {
+    "status", "module", "modul", "system", "dashboard", "provider",
+    "groq", "ollama", "isaac", "steffen", "kernel", "executor",
+    "relay", "memory", "browser", "python", "linux", "android", "termux",
+}
+
 
 # ── Datenstrukturen ───────────────────────────────────────────────────────────
 @dataclass
@@ -104,6 +111,7 @@ class Regelwerk:
         self._history: list[dict]       = []    # Letzte 100 Interaktionen
         self._load()
         self._init_basisregeln()
+        self._dismiss_known_term_questions()
         log.info(f"Regelwerk: {len(self._regeln)} Regeln │ "
                  f"{len(self._offene_fragen())} offene Fragen")
 
@@ -282,6 +290,8 @@ class Regelwerk:
 
         # Lücke 3: Unbekannter Begriff
         unbekannt = self._erkenne_unbekannte_begriffe(steffen_input)
+        if unbekannt and self._term_already_asked(unbekannt):
+            unbekannt = ""
         if unbekannt:
             frage = self._neue_frage(
                 text       = f"Was meinst du genau mit '{unbekannt}'? Für zukünftige Anfragen wichtig.",
@@ -293,15 +303,44 @@ class Regelwerk:
 
         return neue_fragen[:1]   # Max 1 pro Interaktion
 
+    def _extract_term_from_frage(self, frage: Frage) -> Optional[str]:
+        match = re.search(r"mit '([^']+)'", frage.text or "")
+        return match.group(1) if match else None
+
+    def _dismiss_known_term_questions(self):
+        """Schließt Fehlalarm-Rückfragen zu bekannten Systembegriffen."""
+        changed = False
+        for frage in self._fragen:
+            if frage.beantwortet:
+                continue
+            term = self._extract_term_from_frage(frage)
+            if term and term.lower() in _KNOWN_SYSTEM_TERMS:
+                frage.beantwortet = True
+                frage.antwort = "Systembegriff — keine Rückfrage nötig."
+                changed = True
+        if changed:
+            self._save()
+
+    def _term_already_asked(self, term: str) -> bool:
+        wanted = (term or "").strip().lower()
+        if not wanted:
+            return False
+        for frage in self._fragen:
+            extracted = self._extract_term_from_frage(frage)
+            if extracted and extracted.lower() == wanted:
+                return True
+        return False
+
     def _erkenne_unbekannte_begriffe(self, text: str) -> str:
         """Findet möglicherweise unbekannte Eigennamen / Abkürzungen."""
         # Großgeschriebene Wörter die keine Standard-Substantive sind
-        worte = text.split()
+        worte = re.findall(r"[A-Za-zÄÖÜäöüß]+", text or "")
         kandidaten = [
             w for w in worte
             if len(w) > 3
             and w[0].isupper()
-            and not w.lower() in ["isaac", "steffen", "python", "claude",
+            and w.lower() not in _KNOWN_SYSTEM_TERMS
+            and w.lower() not in ["isaac", "steffen", "python", "claude",
                                    "gemini", "openai", "google", "linux",
                                    "windows", "docker", "github"]
         ]
@@ -333,16 +372,38 @@ class Regelwerk:
         return frage
 
     # ── Fragen ausgeben ────────────────────────────────────────────────────────
+    def get_frage(self, frage_id: str) -> Optional[Frage]:
+        for frage in self._fragen:
+            if frage.id == frage_id:
+                return frage
+        return None
+
+    def get_top_pending_frage(self) -> Optional[Frage]:
+        offene = sorted(self._offene_fragen(),
+                        key=lambda f: f.prioritaet, reverse=True)
+        return offene[0] if offene else None
+
     def get_pending_frage(self) -> Optional[str]:
         """
         Gibt die dringendste unbeantwortete Frage zurück.
         Wird vom Kernel abgefragt und an Steffen gestellt.
         """
-        offene = sorted(self._offene_fragen(),
-                        key=lambda f: f.prioritaet, reverse=True)
-        if offene:
-            return f"[Isaac fragt] {offene[0].text}"
+        top = self.get_top_pending_frage()
+        if top:
+            return f"[Isaac fragt] {top.text}"
         return None
+
+    def build_answer_ack(self, frage_id: str, antwort: str) -> str:
+        for frage in self._fragen:
+            if frage.id == frage_id:
+                term = self._extract_term_from_frage(frage)
+                if term:
+                    return (
+                        f"Verstanden — mit '{term}' meinst du: {antwort[:160]}"
+                        f"{'…' if len(antwort) > 160 else ''}. Notiert."
+                    )
+                break
+        return "Verstanden. Ich habe deine Antwort notiert."
 
     def beantworte_frage(self, frage_id: str, antwort: str):
         """Markiert eine Frage als beantwortet und lernt daraus."""

@@ -1,0 +1,86 @@
+PHASE 3 — REFINE
+=================
+Status: IN PROGRESS (gestartet 2026-07-09)
+Voraussetzung: Phase 1 (STABILIZE) ✅ | Phase 2 (ALIGN) ✅
+
+Ziel: Vorhandene Module vertiefen — keine Feature-Expansion, keine neuen Architektur-Layer.
+
+──────────────────────────────────────────────────────────────────────────────
+3.1 REGELWERK & GEDÄCHTNIS
+──────────────────────────────────────────────────────────────────────────────
+[x] 3.1.1 Rückfragen-Loop fixen (Frage-Objekt / wiederholte Status-Frage)
+[x] 3.1.2 Antworten auf [Isaac fragt] erkennen und schließen
+[x] 3.1.3 Regelwerk-Antworten in memory.set_fact persistieren
+[x] 3.1.4 definition.*-Fakten im Retrieval zuverlässig surfacen
+[ ] 3.1.5 Offene Fragen im Dashboard sichtbar machen (optional, blockierend?)
+
+Validierung:
+  unittest test_bug_17..19
+  Manuell: antwort: … → Fact in isaac.db, erneute Anfrage nutzt Definition
+
+──────────────────────────────────────────────────────────────────────────────
+3.2 VERFASSUNG (constitution.py)
+──────────────────────────────────────────────────────────────────────────────
+[x] Modul vorhanden, validate_action() implementiert
+[x] Gates in tool_runtime.py, mcp_registry.py
+[ ] 3.2.1 Kernel-Routing: validate_action vor riskanten Intents (file/code/sudo)
+[ ] 3.2.2 Audit-Pflicht bei blocked actions im Monitor-Log
+[ ] 3.2.3 evals/governance_eval.py erweitern
+
+──────────────────────────────────────────────────────────────────────────────
+3.3 SELF-MODEL (self_model.py + self_model_hooks.py)
+──────────────────────────────────────────────────────────────────────────────
+[x] Hooks in Retrieval-Anreicherung und Post-Process
+[ ] 3.3.1 Präferenz-Updates aus bestätigten Interaktionen härten
+[ ] 3.3.2 Widersprüche zwischen Self-Model und Fakten erkennen
+[ ] 3.3.3 evals/identity_eval.py an reale Hooks koppeln
+
+──────────────────────────────────────────────────────────────────────────────
+3.4 TASK-CHECKPOINT (task_checkpoint.py)
+──────────────────────────────────────────────────────────────────────────────
+[x] State-Machine + Executor-Resume vorhanden
+[ ] 3.4.1 Resume-Pfad für unterbrochene CHAT-Tasks testen
+[ ] 3.4.2 Checkpoint-Cleanup / Retention-Policy
+[ ] 3.4.3 Dashboard-Resume nur localhost (bereits teilweise)
+
+──────────────────────────────────────────────────────────────────────────────
+3.5 MCP-GRUNDGERÜST
+──────────────────────────────────────────────────────────────────────────────
+[x] mcp_server.py, mcp_client.py, mcp_registry.py vorhanden
+[ ] 3.5.1 Einheitlicher MCP-Tool-Pfad über tool_runtime (kein Parallel-Routing)
+[ ] 3.5.2 evals/mcp_eval.py grün halten
+[ ] 3.5.3 Keine Subagent-Expansion (Disziplin)
+
+──────────────────────────────────────────────────────────────────────────────
+3.6 EVAL-HARNESS (evals/)
+──────────────────────────────────────────────────────────────────────────────
+[x] eval_runner.py + 7 Suites vorhanden
+[ ] 3.6.1 eval_runner in CI ergänzen (optional nach unittest)
+[ ] 3.6.2 Routing-Fälle A–G als replay_eval Cases
+[ ] 3.6.3 Regression für Regelwerk/Memory-Lernpfad
+
+──────────────────────────────────────────────────────────────────────────────
+3.7 STABILITÄT & LEGACY-ABBAU
+──────────────────────────────────────────────────────────────────────────────
+[ ] 3.7.1 memory.build_context() als deprecated markieren / nur Wrapper dokumentieren
+[ ] 3.7.2 ACTIVE_PROVIDER-Env konsistent (config.py Fix bereits lokal)
+[ ] 3.7.3 Provider-Settings-Persistenz (provider_settings.json) Pfad testen
+
+──────────────────────────────────────────────────────────────────────────────
+EXPLIZIT NICHT IN PHASE 3
+──────────────────────────────────────────────────────────────────────────────
+- Human Layer, Instincts, Personality, Trust-Modeling
+- Dashboard-Redesign
+- Cloud-Deploy / Codespaces-Expansion
+- Vector-Memory-Neudesign
+- Freie Inquiry/Learning-Loops
+
+──────────────────────────────────────────────────────────────────────────────
+AKTUELLER FOKUS (nächste 3 Schritte)
+──────────────────────────────────────────────────────────────────────────────
+1. [x] 3.1.3 Regelwerk → memory.set_fact
+2. [x] 3.1.4 Retrieval für definition.*-Fakten
+3. [ ] 3.2.1 Constitution-Gate im Kernel
+
+Abschluss Phase 3 wenn: alle [ ] unter 3.1–3.6 erledigt oder bewusst als „later“
+dokumentiert + py_compile + sanity_check + unittest grün + Validierungsfälle A–G.

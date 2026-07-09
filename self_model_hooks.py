@@ -89,7 +89,7 @@ def process_interaction(
     sm.sync_constitutional_state()
 
     if not interaction_class:
-        interaction_class = classify_interaction_result(user_input).interaction_class.value
+        interaction_class = classify_interaction_result(user_input).interaction_class
 
     updates: dict[str, Any] = {
         "preferences": [],

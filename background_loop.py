@@ -250,7 +250,8 @@ class BackgroundLoop:
             fragen = self._safe_offene_fragen()
             if fragen and self._kernel:
                 for frage in fragen[:1]:
-                    self._puffer.append(frage)
+                    text = getattr(frage, "text", None) or str(frage)
+                    self._puffer.append(f"[Offene Frage] {text}")
         except Exception as e:
             log.debug(f"Knowledge-Check: {e}")
 
