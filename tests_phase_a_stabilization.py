@@ -427,7 +427,7 @@ class TestCriticalBugs(unittest.TestCase):
 
     def test_bug_20_kernel_constitution_gate_blocks_self_modify_code(self):
         kernel = object.__new__(IsaacKernel)
-        msg = kernel._enforce_constitution_gate(
+        msg, gate = kernel._enforce_constitution_gate(
             "code: ändere die constitution.json komplett",
             Intent.CODE,
             sudo_aktiv=False,
@@ -435,15 +435,19 @@ class TestCriticalBugs(unittest.TestCase):
         self.assertIsNotNone(msg)
         self.assertIn("[Verfassung]", msg)
         self.assertIn("constitution_not_self_editable", msg)
+        self.assertIsNotNone(gate)
+        self.assertFalse(gate.get("allowed"))
 
     def test_bug_21_kernel_constitution_gate_allows_normal_code(self):
         kernel = object.__new__(IsaacKernel)
-        msg = kernel._enforce_constitution_gate(
+        msg, gate = kernel._enforce_constitution_gate(
             "code: print('hello')",
             Intent.CODE,
             sudo_aktiv=False,
         )
         self.assertIsNone(msg)
+        self.assertIsNotNone(gate)
+        self.assertTrue(gate.get("allowed"))
 
     def test_bug_19_retrieval_surfaces_definition_facts(self):
         import memory as memory_module
@@ -2404,9 +2408,36 @@ class TestPhase4Connect(unittest.TestCase):
             )
         )
         events = [e.event for e in captured["task"].decision_trace.entries]
+        phases = [e.phase for e in captured["task"].decision_trace.entries]
         self.assertIn("classified", events)
         self.assertIn("retrieved", events)
         self.assertIn("strategy_selected", events)
+        self.assertIn(TracePhase.CLASSIFICATION, phases)
+        self.assertIn(TracePhase.RETRIEVAL, phases)
+        self.assertIn(TracePhase.STRATEGY, phases)
+
+    def test_bug_31_constitution_block_audits_routing_trace(self):
+        from audit import AUDIT_PATH
+        from decision_trace import TracePhase
+
+        kernel = object.__new__(IsaacKernel)
+        before = AUDIT_PATH.stat().st_size if AUDIT_PATH.exists() else 0
+        kernel._audit_constitution_block(
+            Intent.CODE,
+            {
+                "allowed": False,
+                "blocked_by": ["constitution_not_self_editable"],
+                "verdict": {"action": "execute_code", "blocked_by": ["constitution_not_self_editable"]},
+            },
+        )
+        self.assertTrue(AUDIT_PATH.exists())
+        self.assertGreater(AUDIT_PATH.stat().st_size, before)
+        last_line = AUDIT_PATH.read_text(encoding="utf-8").strip().splitlines()[-1]
+        entry = json.loads(last_line)
+        self.assertEqual(entry["typ"], "decision_trace")
+        self.assertEqual(entry["outcome"], "blocked")
+        self.assertEqual(entry["entries"][0]["phase"], TracePhase.GOVERNANCE.value)
+        self.assertEqual(entry["entries"][0]["event"], "constitution_blocked")
 
     def test_procedure_hints_boost_matching_tool(self):
         from tool_runtime import _procedure_hints_for_prompt

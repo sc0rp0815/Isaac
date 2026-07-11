@@ -257,8 +257,11 @@ class IsaacKernel:
             f"Node: {emp.node.zustand} │ Sudo: {sudo_aktiv}"
         )
 
-        blocked_msg = self._enforce_constitution_gate(user_input, intent, sudo_aktiv)
+        blocked_msg, constitution_gate = self._enforce_constitution_gate(
+            user_input, intent, sudo_aktiv
+        )
         if blocked_msg:
+            self._audit_constitution_block(intent, constitution_gate)
             AuditLog.isaac_output(blocked_msg)
             return blocked_msg
 
@@ -308,6 +311,7 @@ class IsaacKernel:
             wissen_kontext,
             interaction_class,
             classification,
+            constitution_gate=constitution_gate,
         )
         timing["route_done_ms"] = round((time.perf_counter() - t_start) * 1000, 2)
 
@@ -330,7 +334,8 @@ class IsaacKernel:
     async def _route(self, user_input: str, intent: str,
                      sudo_aktiv: bool, emp, wissen_kontext: str,
                      interaction_class: str,
-                     classification: ClassificationResult
+                     classification: ClassificationResult,
+                     constitution_gate: Optional[dict] = None,
                      ) -> tuple[str, float]:
         """
         Entscheidet welcher Pfad genutzt wird:
@@ -367,6 +372,7 @@ class IsaacKernel:
             wissen_kontext,
             interaction_class,
             classification,
+            constitution_gate=constitution_gate,
         )
 
     async def _multi_ki_route(self, user_input: str, intent: str,
@@ -391,7 +397,8 @@ class IsaacKernel:
     async def _standard_task(self, user_input: str, intent: str,
                               sudo_aktiv: bool, emp, wissen_kontext: str,
                               interaction_class: str,
-                              classification: ClassificationResult
+                              classification: ClassificationResult,
+                              constitution_gate: Optional[dict] = None,
                               ) -> tuple[str, float]:
         retrieval_ctx = self._retrieve_relevant_context(
             user_input=user_input,
@@ -459,10 +466,16 @@ class IsaacKernel:
             classification=classification,
             retrieved_context = retrieval_ctx,
         )
-        from decision_trace import TracePhase
+        from decision_trace import TracePhase, gate_trace_data
 
+        if constitution_gate:
+            task.decision_trace.add(
+                TracePhase.GOVERNANCE,
+                "constitution_allowed",
+                gate_trace_data(constitution_gate),
+            )
         task.decision_trace.add(
-            TracePhase.CONTEXT_INTEGRATION,
+            TracePhase.CLASSIFICATION,
             "classified",
             {
                 "interaction_class": interaction_class,
@@ -471,7 +484,7 @@ class IsaacKernel:
             },
         )
         task.decision_trace.add(
-            TracePhase.CONTEXT_INTEGRATION,
+            TracePhase.RETRIEVAL,
             "retrieved",
             {
                 "facts": len(retrieval_ctx.get("relevant_facts", [])),
@@ -480,7 +493,7 @@ class IsaacKernel:
             },
         )
         task.decision_trace.add(
-            TracePhase.CONTEXT_INTEGRATION,
+            TracePhase.STRATEGY,
             "strategy_selected",
             {
                 "allow_tools": strategy.allow_tools,
@@ -720,14 +733,14 @@ class IsaacKernel:
 
     def _enforce_constitution_gate(
         self, user_input: str, intent: str, sudo_aktiv: bool
-    ) -> Optional[str]:
+    ) -> tuple[Optional[str], Optional[dict]]:
         if intent not in self._CONSTITUTION_GATED_INTENTS:
-            return None
+            return None, None
         action, metadata = self._build_constitution_metadata(
             intent, user_input, sudo_aktiv
         )
         if not action:
-            return None
+            return None, None
 
         gate = apply_constitution_gate(
             action,
@@ -740,7 +753,7 @@ class IsaacKernel:
             ),
         )
         if gate.get("allowed"):
-            return None
+            return None, gate
 
         blocked_by = list(gate.get("blocked_by") or [])
         override = gate.get("override") or {}
@@ -748,8 +761,27 @@ class IsaacKernel:
         return (
             f"[Verfassung] Aktion blockiert: {', '.join(blocked_by)}. "
             f"{reason}. "
-            f"Owner-Override: 'override: <Begründung>' (mit SUDO wenn nötig)."
+            f"Owner-Override: 'override: <Begründung>' (mit SUDO wenn nötig).",
+            gate,
         )
+
+    def _audit_constitution_block(
+        self, intent: str, constitution_gate: Optional[dict]
+    ) -> None:
+        from decision_trace import (
+            DecisionTrace,
+            TracePhase,
+            audit_routing_trace,
+            gate_trace_data,
+        )
+
+        trace = DecisionTrace()
+        trace.add(
+            TracePhase.GOVERNANCE,
+            "constitution_blocked",
+            gate_trace_data(constitution_gate),
+        )
+        audit_routing_trace(trace, intent=intent, outcome="blocked")
 
     def _persist_regelwerk_answer_to_memory(self, frage_id: str, antwort: str) -> None:
         frage = self.regelwerk.get_frage(frage_id)

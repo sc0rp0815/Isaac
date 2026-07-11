@@ -71,7 +71,7 @@ def run() -> dict:
     from isaac_core import IsaacKernel, Intent
 
     kernel = object.__new__(IsaacKernel)
-    blocked_code = kernel._enforce_constitution_gate(
+    blocked_code, blocked_gate = kernel._enforce_constitution_gate(
         "code: ändere die constitution.json komplett",
         Intent.CODE,
         sudo_aktiv=False,
@@ -81,40 +81,42 @@ def run() -> dict:
         "ok": (
             blocked_code is not None
             and "constitution_not_self_editable" in blocked_code
+            and blocked_gate is not None
+            and not blocked_gate.get("allowed")
         ),
         "detail": blocked_code,
     })
 
-    allowed_code = kernel._enforce_constitution_gate(
+    allowed_code, allowed_gate = kernel._enforce_constitution_gate(
         "code: print('hello')",
         Intent.CODE,
         sudo_aktiv=False,
     )
     cases.append({
         "name": "kernel_allows_normal_code",
-        "ok": allowed_code is None,
+        "ok": allowed_code is None and allowed_gate is not None,
         "detail": allowed_code,
     })
 
-    allowed_sudo = kernel._enforce_constitution_gate(
+    allowed_sudo, sudo_gate = kernel._enforce_constitution_gate(
         "sudo geheim",
         Intent.SUDO_OPEN,
         sudo_aktiv=False,
     )
     cases.append({
         "name": "kernel_allows_owner_sudo_open",
-        "ok": allowed_sudo is None,
+        "ok": allowed_sudo is None and sudo_gate is not None,
         "detail": allowed_sudo,
     })
 
-    not_gated = kernel._enforce_constitution_gate(
+    not_gated, skipped_gate = kernel._enforce_constitution_gate(
         "Was ist 2+2?",
         Intent.CHAT,
         sudo_aktiv=False,
     )
     cases.append({
         "name": "kernel_skips_normal_chat",
-        "ok": not_gated is None,
+        "ok": not_gated is None and skipped_gate is None,
         "detail": not_gated,
     })
 

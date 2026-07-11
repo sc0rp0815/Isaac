@@ -1,0 +1,70 @@
+{
+  "recorded_at": "2026-07-11T03:10:00Z",
+  "environment": "local /root/isaacnew",
+  "isaac_disable_vector_memory": true,
+  "cases": [
+    {
+      "id": "A",
+      "input": "Hallo Isaac",
+      "expectation": "lokale Antwort, kein LLM",
+      "ok": true,
+      "evidence": "replay_eval routing_A; e2e output='Hallo. Ich bin da.', llm_calls=0"
+    },
+    {
+      "id": "B",
+      "input": "Danke",
+      "expectation": "lokale Antwort",
+      "ok": true,
+      "evidence": "replay_eval routing_B; e2e output='Gern. Ich bin da.', llm_calls=0"
+    },
+    {
+      "id": "C",
+      "input": "Was ist 2+2?",
+      "expectation": "Chat, keine Tools",
+      "ok": true,
+      "evidence": "replay_eval routing_C: NORMAL_CHAT, allow_tools=false, eligible=false"
+    },
+    {
+      "id": "D",
+      "input": "Erkläre mir das Wetter als sprachliches Motiv in Literatur",
+      "expectation": "kein Tool wegen Wetter",
+      "ok": true,
+      "evidence": "replay_eval routing_D: NORMAL_CHAT, allow_tools=false, eligible=false"
+    },
+    {
+      "id": "E",
+      "input": "Suche: Wetter Berlin",
+      "expectation": "Search wenn Strategy erlaubt",
+      "ok": true,
+      "evidence": "replay_eval routing_E: TOOL_REQUEST/search, allow_tools=true, eligible=true"
+    },
+    {
+      "id": "F",
+      "input": "Browser auf GitHub",
+      "expectation": "nur wenn explizit erlaubt",
+      "ok": true,
+      "evidence": "replay_eval routing_F: browser intent, allow_tools=false (kernel handler, kein opportunistischer Tool-Pfad)"
+    },
+    {
+      "id": "G",
+      "input": "Und?",
+      "expectation": "keine Tool-Aktivierung",
+      "ok": true,
+      "evidence": "replay_eval routing_G: NORMAL_CHAT, allow_tools=false, eligible=false"
+    }
+  ],
+  "eval_runner": {
+    "ok": true,
+    "passed": 52,
+    "total": 52
+  },
+  "unittest": {
+    "modules": [
+      "tests_phase_a_stabilization",
+      "tests_state_io",
+      "tests_provider_configuration"
+    ],
+    "passed": 132,
+    "total": 132
+  }
+}
