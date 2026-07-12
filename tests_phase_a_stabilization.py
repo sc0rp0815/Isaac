@@ -1664,6 +1664,68 @@ class TestConstitutionOwnerOverride(unittest.TestCase):
         self.assertEqual(action.kind, "open_target")
         self.assertEqual(action.params.get("target"), "youtube")
 
+    def test_owner_action_detects_email_compose(self):
+        from owner_action import detect_owner_action
+
+        action = detect_owner_action("schreib email an max@example.com")
+        self.assertIsNotNone(action)
+        self.assertEqual(action.kind, "email_compose")
+        self.assertEqual(action.params.get("to"), "max@example.com")
+
+    def test_owner_action_detects_email_search(self):
+        from owner_action import detect_owner_action
+
+        action = detect_owner_action("suche in mails nach rechnung januar")
+        self.assertIsNotNone(action)
+        self.assertEqual(action.kind, "email_search")
+        self.assertIn("rechnung", action.params.get("query", "").lower())
+
+    def test_owner_action_detects_calendar_today(self):
+        from owner_action import detect_owner_action
+
+        action = detect_owner_action("was steht heute im kalender")
+        self.assertIsNotNone(action)
+        self.assertEqual(action.kind, "calendar_open")
+        self.assertEqual(action.params.get("view"), "today")
+
+    def test_owner_action_detects_maps_navigate(self):
+        from owner_action import detect_owner_action
+
+        action = detect_owner_action("navigiere nach Berlin Hauptbahnhof")
+        self.assertIsNotNone(action)
+        self.assertEqual(action.kind, "maps_navigate")
+        self.assertIn("berlin", action.params.get("destination", "").lower())
+
+    def test_owner_action_detects_device_storage_status(self):
+        from owner_action import detect_owner_action
+
+        action = detect_owner_action("wie voll ist mein speicher")
+        self.assertIsNotNone(action)
+        self.assertEqual(action.kind, "device_status")
+        self.assertEqual(action.params.get("kind"), "storage")
+
+    def test_owner_action_detects_file_copy(self):
+        from owner_action import detect_owner_action
+
+        action = detect_owner_action("kopiere ~/a.txt nach ~/b.txt")
+        self.assertIsNotNone(action)
+        self.assertEqual(action.kind, "file_operation")
+        self.assertEqual(action.params.get("operation"), "copy")
+
+    def test_owner_action_detects_screenshot(self):
+        from owner_action import detect_owner_action
+
+        action = detect_owner_action("mach screenshot")
+        self.assertIsNotNone(action)
+        self.assertEqual(action.kind, "screenshot")
+
+    def test_owner_action_detects_phone_call(self):
+        from owner_action import detect_owner_action
+
+        action = detect_owner_action("rufe an +49 170 1234567")
+        self.assertIsNotNone(action)
+        self.assertEqual(action.kind, "phone_call")
+
     def test_override_prefix_with_sudo_allows_and_audits(self):
         from constitution_override import apply_constitution_gate, build_override_context
         from config import Level
