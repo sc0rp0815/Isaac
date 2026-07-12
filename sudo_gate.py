@@ -89,7 +89,17 @@ class SudoGate:
         """
         Öffnet eine SUDO-Session.
         Gibt Token zurück bei Erfolg, None bei Fehler.
+        
+        Im Admin-Modus: Session wird sofort geöffnet ohne Passwort-Verifizierung.
         """
+        # Admin-Modus: SUDO immer ohne Passwort verfügbar
+        if get_config().privilege_mode == "admin":
+            token = self._create_session()
+            log.info(f"ADMIN-MODUS: SUDO Session geöffnet (ohne Passwort): {token[:8]}...")
+            AuditLog.action("SudoGate", "sudo_open_admin_mode",
+                            f"Admin-Modus Session {token[:8]}...", Level.STEFFEN)
+            return token
+        
         if self._first_run:
             # Erster Start: Passwort wird gesetzt
             self.set_password(passwort)
@@ -109,7 +119,16 @@ class SudoGate:
 
     # ── Session prüfen ────────────────────────────────────────────────────────
     def check(self, token: str) -> bool:
-        """Prüft ob ein SUDO-Token gültig und aktiv ist."""
+        """
+        Prüft ob ein SUDO-Token gültig und aktiv ist.
+        
+        Im Admin-Modus: SUDO ist immer aktiv (jeder Token ist gültig).
+        """
+        # Admin-Modus: SUDO immer offen
+        if get_config().privilege_mode == "admin":
+            log.debug("SUDO-Check im Admin-Modus: TRUE (vorautorisiert)")
+            return True
+        
         s = self._sessions.get(token)
         if not s or not s.aktiv:
             return False

@@ -347,6 +347,7 @@ class IsaacConfig:
     multi_tool_mode: bool = True
     style_mode: str = os.getenv("ISAAC_STYLE_MODE", "light_sarcastic")
     owner_name: str = os.getenv("ISAAC_OWNER", "Steffen")
+    privilege_mode: str = os.getenv("ISAAC_PRIVILEGE_MODE", "user")  # "user" | "admin"
 
     def __post_init__(self):
         self._load_provider_settings()

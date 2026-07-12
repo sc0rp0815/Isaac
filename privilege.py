@@ -97,7 +97,14 @@ class PrivilegeGate:
         """
         Gibt (erlaubt, grund) zurück.
         Wird von @require_privilege aufgerufen.
+        
+        Im Admin-Modus: Alle Aktionen sind sofort erlaubt (logging bleibt aktiv).
         """
+        # Admin-Modus: Alle Aktionen direkt erlaubt (aber trotzdem gelogged)
+        if get_config().privilege_mode == "admin":
+            self._log_decision(aktion, ctx, True, "ADMIN_MODE (vorautorisiert)")
+            return True, "ADMIN_MODE"
+        
         # Paused-Check (nur Steffen darf noch agieren)
         if self._paused and ctx.level < Level.STEFFEN:
             grund = "Isaac ist pausiert. Nur Steffen-Level erlaubt."
