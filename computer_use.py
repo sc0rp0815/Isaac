@@ -81,7 +81,7 @@ def computer_use_enabled() -> bool:
     explicit = getattr(cfg, "computer_use_enabled", None)
     if explicit is not None:
         return bool(explicit)
-    return detect_runtime() == "termux"
+    return detect_runtime() in {"termux", "s8", "linux_desktop"}
 
 
 def computer_use_live() -> bool:
@@ -187,9 +187,48 @@ def parse_agent_body(body: str) -> AgentAction:
     if lower.startswith("wait "):
         return AgentAction("wait", {"seconds": float(text.split(maxsplit=1)[1].replace(",", "."))})
 
+    if lower.startswith("ui dump"):
+        return AgentAction("ui_dump")
+    if lower.startswith("ui list"):
+        return AgentAction("ui_list")
+    if lower.startswith("ui tap "):
+        target = text[len("ui tap "):].strip()
+        if not target:
+            raise ValueError("Format: agent: ui tap Einstellungen")
+        return AgentAction("ui_tap", {"text": target})
+    if lower == "ui unlock":
+        return AgentAction("ui_unlock")
+    if lower.startswith("ui key "):
+        code = text[len("ui key "):].strip()
+        if not code:
+            raise ValueError("Format: agent: ui key enter")
+        return AgentAction("ui_key", {"code": code})
+
+    if lower.startswith("credential list"):
+        return AgentAction("credential_list")
+    if lower.startswith("credential screen"):
+        site = text[len("credential screen"):].strip()
+        return AgentAction("credential_screen", {"site": site})
+    if lower.startswith("credential read "):
+        body = text[len("credential read "):].strip()
+        import_flag = False
+        if " --import" in body.lower():
+            import_flag = True
+            body = re.sub(r"\s+--import\s*$", "", body, flags=re.I).strip()
+        if not body:
+            raise ValueError("Format: agent: credential read google.com [--import]")
+        return AgentAction("credential_read", {"site": body, "import": import_flag})
+    if lower.startswith("credential internal "):
+        site = text[len("credential internal "):].strip()
+        if not site:
+            raise ValueError("Format: agent: credential internal DOMAIN")
+        return AgentAction("credential_internal", {"site": site})
+
     raise ValueError(
         "Unbekannter Agent-Befehl. Beispiele: observe, screenshot, shell ls -la, "
-        "clipboard get, clipboard set Text, open https://…, tap 400 900, type Hallo"
+        "clipboard get, clipboard set Text, open https://…, tap 400 900, type Hallo, "
+        "ui dump, ui list, ui tap Einstellungen, ui unlock, ui key enter, "
+        "credential list, credential read google.com, credential screen"
     )
 
 
@@ -234,6 +273,15 @@ class ComputerUseRuntime:
             "type_text": self._type_text,
             "swipe": self._swipe,
             "wait": self._wait,
+            "ui_dump": self._ui_dump,
+            "ui_list": self._ui_list,
+            "ui_tap": self._ui_tap,
+            "ui_unlock": self._ui_unlock,
+            "ui_key": self._ui_key,
+            "credential_list": self._credential_list,
+            "credential_screen": self._credential_screen,
+            "credential_read": self._credential_read,
+            "credential_internal": self._credential_internal,
         }
         handler = handlers.get(action.action)
         if not handler:
@@ -584,6 +632,271 @@ class ComputerUseRuntime:
         await asyncio.sleep(seconds)
         return {"ok": True, "seconds": seconds}
 
+    async def _capture_ui_nodes(self) -> tuple[list[Any], str]:
+        from ui_automation import UI_DUMP_COMMANDS, extract_ui_dump, parse_ui_xml
+
+        errors: list[str] = []
+        for command in UI_DUMP_COMMANDS:
+            result = await self._shell({"command": command})
+            xml_text = extract_ui_dump(result.get("stdout", ""))
+            if not xml_text:
+                err = (result.get("stderr") or result.get("stdout") or "leer")[:200]
+                errors.append(f"{command.split('&&')[0].strip()}: {err}")
+                continue
+            try:
+                return parse_ui_xml(xml_text), command.split("&&")[0].strip()
+            except Exception as exc:
+                errors.append(f"parse: {exc}")
+        raise RuntimeError(
+            "UI-Dump nicht verfügbar (uiautomator/adb). "
+            + " | ".join(errors[:3])
+        )
+
+    async def _ui_dump(self, params: dict[str, Any]) -> dict[str, Any]:
+        from ui_automation import audit_ui_action, summarize_nodes
+
+        try:
+            nodes, via = await self._capture_ui_nodes()
+        except Exception as exc:
+            return {"ok": False, "error": str(exc)}
+        audit_ui_action("ui_dump", f"nodes={len(nodes)} via={via}")
+        return {
+            "ok": True,
+            "via": via,
+            "node_count": len(nodes),
+            "summary": summarize_nodes(nodes),
+        }
+
+    async def _ui_list(self, params: dict[str, Any]) -> dict[str, Any]:
+        from ui_automation import audit_ui_action, list_interactive_labels
+
+        try:
+            nodes, via = await self._capture_ui_nodes()
+        except Exception as exc:
+            return {"ok": False, "error": str(exc)}
+        labels = list_interactive_labels(nodes)
+        audit_ui_action("ui_list", f"labels={len(labels)} via={via}")
+        return {"ok": True, "via": via, "labels": labels, "count": len(labels)}
+
+    async def _ui_tap(self, params: dict[str, Any]) -> dict[str, Any]:
+        from ui_automation import audit_ui_action, find_nodes
+
+        query = (params.get("text") or "").strip()
+        if not query:
+            return {"ok": False, "error": "ui tap benötigt Text/Label"}
+        try:
+            nodes, via = await self._capture_ui_nodes()
+        except Exception as exc:
+            return {"ok": False, "error": str(exc)}
+        matches = find_nodes(nodes, query)
+        if not matches:
+            return {"ok": False, "error": f"Kein klickbares Element für '{query}'", "via": via}
+        target = matches[0]
+        x, y = target.center()
+        tap = await self._tap({"x": x, "y": y})
+        if not tap.get("ok"):
+            return tap
+        audit_ui_action("ui_tap", f"label={target.label[:80]} x={x} y={y}")
+        return {
+            "ok": True,
+            "via": via,
+            "label": target.label,
+            "x": x,
+            "y": y,
+            "matches": len(matches),
+        }
+
+    async def _ui_key(self, params: dict[str, Any]) -> dict[str, Any]:
+        from ui_automation import android_keycode, audit_ui_action
+
+        if not _command_exists("input"):
+            return {"ok": False, "error": "ui key benötigt Android input-Befehl"}
+        try:
+            code = android_keycode(str(params.get("code") or ""))
+        except ValueError as exc:
+            return {"ok": False, "error": str(exc)}
+        proc = await asyncio.create_subprocess_exec(
+            "input",
+            "keyevent",
+            str(code),
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        _, stderr = await asyncio.wait_for(proc.communicate(), timeout=10)
+        if proc.returncode != 0:
+            return {"ok": False, "error": (stderr or b"keyevent failed").decode(errors="replace")}
+        audit_ui_action("ui_key", f"code={code}")
+        return {"ok": True, "code": code}
+
+    def _credential_gate(self) -> Optional[dict[str, Any]]:
+        from credential_access import require_credential_access
+
+        err = require_credential_access()
+        if err:
+            return {"ok": False, "error": err}
+        return None
+
+    async def _credential_list(self, params: dict[str, Any]) -> dict[str, Any]:
+        from credential_access import audit_credential_access, list_internal_credentials, list_visible_sites
+
+        blocked = self._credential_gate()
+        if blocked:
+            return blocked
+        internal = list_internal_credentials()
+        visible_sites: list[str] = []
+        try:
+            nodes, _via = await self._capture_ui_nodes()
+            visible_sites = list_visible_sites(nodes)
+        except Exception:
+            visible_sites = []
+        audit_credential_access("list", f"internal={len(internal)} visible={len(visible_sites)}")
+        return {"ok": True, "internal": internal, "visible_sites": visible_sites}
+
+    async def _credential_screen(self, params: dict[str, Any]) -> dict[str, Any]:
+        from credential_access import audit_credential_access, extract_visible_credentials
+
+        blocked = self._credential_gate()
+        if blocked:
+            return blocked
+        site_hint = (params.get("site") or "").strip()
+        try:
+            nodes, via = await self._capture_ui_nodes()
+        except Exception as exc:
+            return {"ok": False, "error": str(exc)}
+        records = extract_visible_credentials(nodes, site_hint=site_hint)
+        if not records:
+            return {"ok": False, "error": "Keine sichtbaren Credentials auf dem Bildschirm", "via": via}
+        audit_credential_access("screen", f"site={records[0].site or '-'} via={via}")
+        return {
+            "ok": True,
+            "via": via,
+            "credentials": [row.to_dict(reveal=True) for row in records],
+        }
+
+    async def _credential_internal(self, params: dict[str, Any]) -> dict[str, Any]:
+        from credential_access import audit_credential_access, read_internal_credential
+
+        blocked = self._credential_gate()
+        if blocked:
+            return blocked
+        site = (params.get("site") or "").strip()
+        record = read_internal_credential(site)
+        if not record:
+            return {"ok": False, "error": f"Kein interner Credential-Eintrag für '{site}'"}
+        audit_credential_access("internal", f"site={record.site} source={record.source}")
+        return {"ok": True, "credential": record.to_dict(reveal=True)}
+
+    async def _credential_read(self, params: dict[str, Any]) -> dict[str, Any]:
+        from credential_access import (
+            audit_credential_access,
+            extract_visible_credentials,
+            import_credential,
+            pick_show_password_label,
+            read_internal_credential,
+        )
+        from ui_automation import find_nodes
+
+        blocked = self._credential_gate()
+        if blocked:
+            return blocked
+        site = (params.get("site") or "").strip()
+        if not site:
+            return {"ok": False, "error": "credential read benötigt Site/Domain"}
+        do_import = bool(params.get("import"))
+
+        internal = read_internal_credential(site)
+        if internal and internal.password:
+            cred = internal
+            if do_import:
+                import_credential(cred)
+            audit_credential_access("read_internal", f"site={cred.site}")
+            return {"ok": True, "source": cred.source, "credential": cred.to_dict(reveal=True), "imported": do_import}
+
+        try:
+            nodes, via = await self._capture_ui_nodes()
+        except Exception as exc:
+            return {"ok": False, "error": str(exc)}
+
+        site_nodes = find_nodes(nodes, site, clickable_only=True)
+        if site_nodes:
+            x, y = site_nodes[0].center()
+            tap = await self._tap({"x": x, "y": y})
+            if not tap.get("ok"):
+                return tap
+            await asyncio.sleep(1.0)
+            try:
+                nodes, via = await self._capture_ui_nodes()
+            except Exception as exc:
+                return {"ok": False, "error": str(exc)}
+
+        show_label = pick_show_password_label(nodes)
+        if show_label:
+            show_tap = await self._ui_tap({"text": show_label})
+            if show_tap.get("ok"):
+                await asyncio.sleep(0.4)
+                await self._ui_unlock({})
+                await asyncio.sleep(0.8)
+                try:
+                    nodes, via = await self._capture_ui_nodes()
+                except Exception as exc:
+                    return {"ok": False, "error": str(exc)}
+
+        records = extract_visible_credentials(nodes, site_hint=site)
+        if not records or not records[0].password:
+            visible = [n.label for n in find_nodes(nodes, site, clickable_only=False)[:6]]
+            return {
+                "ok": False,
+                "error": (
+                    f"Credential für '{site}' nicht sichtbar. "
+                    "Öffne Chrome → Passwörter, scrolle zum Eintrag oder nutze credential screen."
+                ),
+                "via": via,
+                "hints": visible,
+            }
+        cred = records[0]
+        if do_import:
+            import_credential(cred)
+        audit_credential_access("read_ui", f"site={cred.site or site}")
+        return {
+            "ok": True,
+            "source": cred.source,
+            "credential": cred.to_dict(reveal=True),
+            "imported": do_import,
+            "via": via,
+        }
+
+    async def _ui_unlock(self, params: dict[str, Any]) -> dict[str, Any]:
+        from ui_automation import DEVICE_PIN_SECRET_REF, audit_ui_action, load_device_pin, pin_keycodes
+
+        try:
+            pin = load_device_pin()
+        except ValueError as exc:
+            return {"ok": False, "error": str(exc)}
+        if not pin:
+            return {
+                "ok": False,
+                "error": (
+                    f"Geräte-PIN fehlt. Hinterlege Secret-Ref {DEVICE_PIN_SECRET_REF} "
+                    "lokal (Dashboard/Secrets) — niemals im Chat."
+                ),
+            }
+        if not _command_exists("input"):
+            return {"ok": False, "error": "ui unlock benötigt Android input-Befehl"}
+        for code in pin_keycodes(pin):
+            proc = await asyncio.create_subprocess_exec(
+                "input",
+                "keyevent",
+                str(code),
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            _, stderr = await asyncio.wait_for(proc.communicate(), timeout=8)
+            if proc.returncode != 0:
+                return {"ok": False, "error": (stderr or b"unlock keyevent failed").decode(errors="replace")}
+            await asyncio.sleep(0.12)
+        audit_ui_action("ui_unlock", f"ref={DEVICE_PIN_SECRET_REF} digits={len(pin)}")
+        return {"ok": True, "digits": len(pin), "ref": DEVICE_PIN_SECRET_REF}
+
     async def _termux_battery(self) -> dict[str, Any]:
         if not _command_exists("termux-battery-status"):
             return {}
@@ -605,11 +918,16 @@ class ComputerUseRuntime:
             ("termux-clipboard-get", "clipboard"),
             ("termux-open-url", "open_url"),
             ("input", "tap_type_swipe"),
+            ("uiautomator", "ui_dump"),
+            ("adb", "ui_dump"),
             ("xdotool", "desktop_input"),
             ("scrot", "screenshot"),
         ):
             if _command_exists(name):
                 caps.append(key)
+        if _command_exists("input"):
+            caps.append("ui_tap")
+            caps.append("ui_unlock")
         return sorted(set(caps))
 
 
@@ -674,4 +992,44 @@ def format_agent_result(result: dict[str, Any]) -> str:
         return "\n".join(parts)
     if result.get("text") is not None:
         return f"[Agent] Clipboard:\n{result.get('text', '')[:3500]}"
+    if result.get("summary"):
+        lines = [
+            f"[Agent] UI-Dump ({result.get('node_count', 0)} Elemente, via {result.get('via', '-')})",
+            str(result.get("summary", "")),
+        ]
+        return "\n".join(lines)
+    if result.get("labels") is not None:
+        labels = result.get("labels") or []
+        lines = [f"[Agent] UI-Liste ({len(labels)} klickbar, via {result.get('via', '-')})"]
+        lines.extend(f"  - {label}" for label in labels[:30])
+        return "\n".join(lines)
+    if result.get("label") and result.get("x") is not None:
+        return (
+            f"[Agent] UI-Tap OK: '{result.get('label')}' "
+            f"@ {result.get('x')},{result.get('y')} "
+            f"(Treffer: {result.get('matches', 1)})"
+        )
+    if result.get("digits") and result.get("ref"):
+        return f"[Agent] Gerät entsperrt ({result.get('digits')} Ziffern via {result.get('ref')})"
+    if result.get("credentials"):
+        lines = ["[Agent] Sichtbare Credentials:"]
+        for row in result.get("credentials", [])[:5]:
+            lines.append(
+                f"  - {row.get('site') or '-'} | {row.get('username') or '-'} | {row.get('password') or '-'}"
+            )
+        return "\n".join(lines)
+    if result.get("credential"):
+        row = result.get("credential") or {}
+        imported = " (importiert)" if result.get("imported") else ""
+        return (
+            f"[Agent] Credential{imported} [{result.get('source', '-')}] "
+            f"{row.get('site') or '-'} | {row.get('username') or '-'} | {row.get('password') or '-'}"
+        )
+    if result.get("internal") is not None:
+        lines = ["[Agent] Credential-Inventar:"]
+        for row in (result.get("internal") or [])[:20]:
+            lines.append(f"  intern: {row.get('site')} ({row.get('username') or row.get('source')})")
+        for site in (result.get("visible_sites") or [])[:20]:
+            lines.append(f"  bildschirm: {site}")
+        return "\n".join(lines)
     return f"[Agent] OK: {json.dumps(result, ensure_ascii=False)[:2000]}"

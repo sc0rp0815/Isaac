@@ -78,6 +78,10 @@ _CONTACT_MARKERS = ("kontakt", "kontakte", "telefonbuch", "contacts")
 _BLUETOOTH_MARKERS = ("bluetooth", "bluetooth")
 _TORCH_MARKERS = ("taschenlampe", "torch", "flashlight", "blitzlicht")
 _LOCATION_MARKERS = ("standort", "position", "gps", "koordinaten")
+_CREDENTIAL_MARKERS = (
+    "passwort", "passwörter", "passwoerter", "login", "logins", "zugangsdaten",
+    "credentials", "credential", "anmeldedaten", "passwort-manager", "passwort manager",
+)
 _NOTIFICATION_MARKERS = ("benachrichtigung", "notification", "notify")
 _GIT_MARKERS = ("git status", "git pull", "git log", "git diff", "git commit")
 _INSTALL_MARKERS = ("installiere", "apt install", "pip install", "pkg install")
@@ -242,6 +246,10 @@ def _is_explanatory(normalized: str) -> bool:
 
 
 def _is_owner_imperative(normalized: str) -> bool:
+    if normalized in {"speedtest", "geschwindigkeitstest", "internetgeschwindigkeit"}:
+        return True
+    if _extract_toggle_target(normalized):
+        return True
     if normalized.startswith(("git ", "isaac ", "ping ", "ping6 ", "timer ", "wecker ", "alarm ")):
         return True
     if _has_action_verb(normalized):
@@ -708,6 +716,32 @@ def _device_status_kind(normalized: str) -> str:
     return "all"
 
 
+def _extract_credential_request(text: str) -> tuple[str, bool]:
+    normalized = _normalize(text)
+    if not _contains_any(normalized, _CREDENTIAL_MARKERS):
+        return "", False
+    if not any(v in normalized for v in ("lies", "lese", "hole", "hol", "zeig", "import", "ausles", "auslese", "read")):
+        if not re.search(r"\b(passwort|login|zugangsdaten|credentials?)\b.*\b(für|fuer|von)\b", normalized):
+            return "", False
+    import_flag = any(t in normalized for t in ("import", "importiere", "speicher", "übernimm", "uebernimm"))
+    patterns = (
+        r"(?:lies|lese|hole|hol|zeig|importiere|ausles|auslese).*(?:passwort|login|zugangsdaten|credentials?).*(?:für|fuer|von)\s+(.+)$",
+        r"(?:passwort|login|zugangsdaten|credentials?).*(?:für|fuer|von)\s+(.+)$",
+        r"(?:credentials?|logins?).*(?:für|fuer|von)\s+(.+)$",
+    )
+    for pattern in patterns:
+        m = re.search(pattern, text.strip(), re.I)
+        if m:
+            site = m.group(1).strip(" .,!?\"'")
+            site = re.sub(r"\s+(aus|in|im)\s+(chrome|browser|passwort-manager|passwort manager).*$", "", site, flags=re.I)
+            return site, import_flag
+    if _contains_any(normalized, ("passwort", "passwoerter", "passwörter", "credentials", "zugangsdaten")) and any(
+        v in normalized for v in ("liste", "list", "zeig alle", "inventar")
+    ):
+        return "__list__", False
+    return "", False
+
+
 def _extract_shell_command(text: str) -> str:
     patterns = (
         r"(?:führe aus|fuehre aus|ausführen|ausfuehren|befehl)\s*:\s*(.+)$",
@@ -730,6 +764,22 @@ def detect_owner_action(text: str) -> Optional[OwnerAction]:
     normalized = _normalize(raw)
     if not normalized or _is_explanatory(normalized):
         return None
+
+    if is_owner_equivalent_mode():
+        from security_toolkit import parse_security_command
+
+        security_cmd = parse_security_command(raw)
+        if security_cmd:
+            return OwnerAction("security_toolkit", security_cmd, raw=raw)
+
+        cred_site, cred_import = _extract_credential_request(raw)
+        if cred_site:
+            return OwnerAction(
+                "credential_access",
+                {"site": "" if cred_site == "__list__" else cred_site, "import": cred_import},
+                raw=raw,
+            )
+
     if not _is_owner_imperative(normalized):
         return None
 
@@ -909,14 +959,9 @@ def detect_owner_action(text: str) -> Optional[OwnerAction]:
             raw=raw,
         )
 
-    if (
-        "wo bin ich" in normalized
-        or _contains_any(normalized, _DEVICE_STATUS_MARKERS)
-        or re.search(r"(wie (voll|viel)|was steht).*(akku|batterie|speicher|kalender|ip)", normalized)
-    ):
-        kind = _device_status_kind(normalized)
-        if kind:
-            return OwnerAction("device_status", {"kind": kind}, raw=raw)
+    status_kind = _device_status_kind(normalized)
+    if status_kind and status_kind != "all":
+        return OwnerAction("device_status", {"kind": status_kind}, raw=raw)
 
     if _contains_any(normalized, _PHOTOS_MARKERS) or re.search(r"\bfotos\b", normalized):
         query = _extract_photos_query(raw)
@@ -1041,6 +1086,8 @@ async def execute_owner_action(action: OwnerAction) -> tuple[str, bool]:
         "device_toggle": _device_toggle,
         "git_command": _git_command,
         "package_install": _package_install,
+        "security_toolkit": _security_toolkit,
+        "credential_access": _credential_access,
         "isaac_ops": _isaac_ops,
     }
     handler = handlers.get(action.kind)
@@ -2076,6 +2123,35 @@ async def _git_command(action: OwnerAction) -> tuple[str, bool]:
     result = await _shell(f"cd {cwd} && {command}")
     lines = [f"[Owner] {command}", "", result.get("stdout") or result.get("error", "")]
     return "\n".join(lines).strip(), bool(result.get("ok"))
+
+
+async def _credential_access(action: OwnerAction) -> tuple[str, bool]:
+    from computer_use import AgentAction, format_agent_result, get_computer_use
+
+    site = str(action.params.get("site") or "").strip()
+    do_import = bool(action.params.get("import"))
+    runtime = get_computer_use()
+    if not site:
+        result = await runtime.execute(AgentAction("credential_list"))
+    else:
+        result = await runtime.execute(
+            AgentAction("credential_read", {"site": site, "import": do_import})
+        )
+    text = format_agent_result(result).replace("[Agent]", "[Owner]", 1)
+    return text, bool(result.get("ok"))
+
+
+async def _security_toolkit(action: OwnerAction) -> tuple[str, bool]:
+    from security_toolkit import execute_security_command
+    from procedure_memory import record_owner_action_outcome
+
+    result, ok = await execute_security_command(dict(action.params or {}))
+    try:
+        kind = str(action.params.get("tool_id") or action.params.get("action") or "security_toolkit")
+        record_owner_action_outcome(kind=f"security:{kind}", raw=action.raw, ok=ok)
+    except Exception as exc:
+        log.debug("Security procedure capture skipped: %s", exc)
+    return result, ok
 
 
 async def _package_install(action: OwnerAction) -> tuple[str, bool]:

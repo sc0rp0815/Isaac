@@ -342,6 +342,7 @@ async def list_live_tool_interfaces() -> dict:
 def _procedure_hints_for_prompt(prompt: str) -> dict[str, float]:
     try:
         from memory import get_memory
+        from procedure_memory import owner_procedure_hints_for_prompt
 
         hints: dict[str, float] = {}
         for proc in get_memory().search_procedures(prompt, limit=4):
@@ -353,11 +354,26 @@ def _procedure_hints_for_prompt(prompt: str) -> dict[str, float]:
             boost = min(18.0, rel * 12.0)
             for tool_name in proc.get("tools_used") or []:
                 name = str(tool_name).strip().lower()
+                if name.startswith("owner:"):
+                    continue
                 if name:
                     hints[name] = max(hints.get(name, 0.0), boost)
+        owner_hints, _category = owner_procedure_hints_for_prompt(prompt)
+        for name, boost in owner_hints.items():
+            hints[name] = max(hints.get(name, 0.0), boost)
         return hints
     except Exception:
         return {}
+
+
+def _procedure_category_hint_for_prompt(prompt: str) -> str:
+    try:
+        from procedure_memory import owner_procedure_hints_for_prompt
+
+        _hints, category = owner_procedure_hints_for_prompt(prompt)
+        return category
+    except Exception:
+        return ""
 
 
 async def select_live_tool_for_task(task, prompt: str, iteration: int, policy: ToolPolicy | None = None) -> ToolSelectionDecision:
@@ -368,6 +384,9 @@ async def select_live_tool_for_task(task, prompt: str, iteration: int, policy: T
     category_pref = state.preferred_categories or [infer_category(prompt)]
     kind_pref = state.preferred_kinds or ["mcp", "api", "search"]
     procedure_hints = _procedure_hints_for_prompt(prompt)
+    owner_category = _procedure_category_hint_for_prompt(prompt)
+    if owner_category and owner_category not in category_pref:
+        category_pref = [owner_category] + list(category_pref)
 
     candidates: list[tuple[float, dict]] = []
     for row in reg.list_tools(active_only=True):

@@ -16,6 +16,69 @@ log = logging.getLogger("Isaac.ProcedureMemory")
 MIN_SCORE_SUCCESS = 5.0
 MAX_SCORE_FAILURE = 4.0
 
+OWNER_KIND_TOOL_HINTS: dict[str, list[str]] = {
+    "web_search": ["isaac.search_web", "search_web", "search", "internet_search"],
+    "weather": ["isaac.search_web", "search_web"],
+    "shopping_search": ["isaac.run_browser_action", "browser", "isaac.search_web"],
+    "photos_search": ["isaac.run_browser_action", "browser"],
+    "maps_navigate": ["isaac.run_browser_action", "browser"],
+    "open_target": ["isaac.run_browser_action", "browser"],
+    "email_search": ["isaac.run_browser_action", "browser"],
+    "email_compose": ["isaac.run_browser_action", "browser"],
+    "email_open": ["isaac.run_browser_action", "browser"],
+    "calendar_open": ["isaac.run_browser_action", "browser"],
+    "calendar_create": ["isaac.run_browser_action", "browser"],
+    "media_play": ["isaac.run_browser_action", "browser"],
+    "translate": ["isaac.run_browser_action", "browser"],
+    "router_admin": ["isaac.run_browser_action", "browser"],
+    "wlan_status": ["isaac.task_status"],
+    "device_status": ["isaac.task_status"],
+    "isaac_ops": ["isaac.task_status", "isaac.audit_recent"],
+    "network_test": ["isaac.task_status"],
+    "find_files": ["isaac.read_file", "isaac.write_file"],
+    "file_list": ["isaac.read_file"],
+    "file_operation": ["isaac.read_file", "isaac.write_file"],
+    "file_write": ["isaac.write_file"],
+    "shell": ["isaac.run_shell"],
+    "git_command": ["isaac.run_shell"],
+    "package_install": ["isaac.run_shell"],
+    "security:metasploit": ["isaac.run_shell"],
+    "security:aircrack": ["isaac.run_shell"],
+    "security:nmap": ["isaac.run_shell"],
+    "security:sync": ["isaac.run_shell"],
+    "security:security_toolkit": ["isaac.run_shell"],
+}
+
+OWNER_KIND_CATEGORY_HINTS: dict[str, str] = {
+    "web_search": "suche",
+    "weather": "suche",
+    "shopping_search": "suche",
+    "photos_search": "suche",
+    "maps_navigate": "suche",
+    "open_target": "suche",
+    "email_search": "suche",
+    "email_compose": "suche",
+    "email_open": "suche",
+    "calendar_open": "suche",
+    "calendar_create": "suche",
+    "media_play": "suche",
+    "translate": "suche",
+    "router_admin": "suche",
+    "find_files": "resource",
+    "file_list": "resource",
+    "file_operation": "resource",
+    "file_write": "resource",
+    "filesystem_cleanup": "resource",
+    "shell": "code",
+    "git_command": "code",
+    "package_install": "code",
+    "security:metasploit": "code",
+    "security:aircrack": "code",
+    "security:nmap": "code",
+    "security:sync": "code",
+    "security:security_toolkit": "code",
+}
+
 
 def _extract_keywords(text: str, limit: int = 6) -> list[str]:
     terms = [w.lower() for w in re.findall(r"\w+", text or "") if len(w) >= 4]
@@ -70,6 +133,151 @@ def _should_capture(task: Any) -> bool:
         if ic_val in ("EXPLICIT_SEARCH", "EXPLICIT_BROWSER", "EXPLICIT_TOOL"):
             return True
     return False
+
+
+def _owner_kind_from_procedure(proc: dict) -> str:
+    tools = proc.get("tools_used") or []
+    for tool_name in tools:
+        name = str(tool_name).strip().lower()
+        if name.startswith("owner:"):
+            return name.split(":", 1)[-1]
+    metadata = proc.get("metadata") or {}
+    if isinstance(metadata, dict):
+        kind = str(metadata.get("owner_action_kind") or "").strip().lower()
+        if kind:
+            return kind
+    if str(proc.get("task_type") or "").strip().lower() == "owner_action":
+        hint = str(proc.get("intent_hint") or "").strip().lower()
+        for kind in OWNER_KIND_TOOL_HINTS:
+            if kind.replace("_", " ") in hint or kind in hint:
+                return kind
+    return ""
+
+
+def owner_procedure_hints_for_prompt(prompt: str) -> tuple[dict[str, float], str]:
+    """Liefert Tool-Boosts und Kategorie aus erfolgreichen Owner-Verfahren."""
+    from memory import get_memory
+
+    hints: dict[str, float] = {}
+    category = ""
+    try:
+        procedures = get_memory().search_procedures(prompt, limit=6)
+    except Exception:
+        return hints, category
+
+    for proc in procedures:
+        if proc.get("degraded"):
+            continue
+        owner_kind = _owner_kind_from_procedure(proc)
+        if not owner_kind:
+            continue
+
+        rel = float(proc.get("reliability") or 0.0)
+        if rel < 0.45:
+            continue
+        boost = min(20.0, rel * 14.0)
+        for tool_name in OWNER_KIND_TOOL_HINTS.get(owner_kind, []):
+            key = str(tool_name).strip().lower()
+            if key:
+                hints[key] = max(hints.get(key, 0.0), boost)
+        cat = OWNER_KIND_CATEGORY_HINTS.get(owner_kind, "")
+        if cat and not category:
+            category = cat
+    return hints, category
+
+
+def record_owner_action_outcome(
+    *,
+    kind: str,
+    raw: str,
+    ok: bool,
+) -> dict | None:
+    """Persistiert erfolgreiche Owner-Befehle als wiederverwendbare Verfahren."""
+    action_kind = (kind or "").strip().lower()
+    if not action_kind:
+        return None
+
+    from memory import get_memory
+
+    mem = get_memory()
+    signature = hashlib.sha256(f"owner::{action_kind}".encode()).hexdigest()[:16]
+    keywords = _extract_keywords(raw, 4)
+    existing = mem.get_procedure_by_signature(signature)
+    old_rel = float(existing.get("reliability", 0.5)) if existing else 0.5
+    success_count = int(existing.get("success_count", 0)) if existing else 0
+    failure_count = int(existing.get("failure_count", 0)) if existing else 0
+    degraded = bool(existing.get("degraded")) if existing else False
+
+    if ok:
+        delta = bounded_update(
+            "procedure",
+            1.0,
+            evidence_strength=0.85,
+            repetition=min(2.0, 1.0 + success_count * 0.1),
+        )
+        success_count += 1
+        new_rel = min(1.0, old_rel + delta)
+        if failure_count == 0:
+            degraded = False
+        reason = f"Erfolgreicher Owner-Befehl ({action_kind})"
+        status = "done"
+        score = 8.0
+    else:
+        delta = bounded_update(
+            "procedure",
+            -1.0,
+            evidence_strength=0.6,
+            repetition=min(2.0, 1.0 + failure_count * 0.15),
+        )
+        failure_count += 1
+        new_rel = max(0.05, old_rel + delta)
+        if failure_count > success_count:
+            degraded = True
+        reason = f"Fehlgeschlagener Owner-Befehl ({action_kind})"
+        status = "failed"
+        score = 3.0
+
+    proc_id = mem.upsert_procedure(
+        signature=signature,
+        task_type="owner_action",
+        intent_hint=(raw or "")[:120],
+        keywords=keywords,
+        tools_used=[f"owner:{action_kind}"],
+        trace_summary=f"owner_action:{action_kind}",
+        reliability=new_rel,
+        success_count=success_count,
+        failure_count=failure_count,
+        last_task_id=f"owner:{action_kind}",
+        last_score=score,
+        last_status=status,
+        degraded=degraded,
+        metadata={"owner_action_kind": action_kind},
+    )
+
+    try:
+        mem.log_development_event(
+            event_type="procedure_update",
+            target_kind="procedure",
+            target_key=signature,
+            delta=round(new_rel - old_rel, 4),
+            confidence_before=old_rel,
+            confidence_after=new_rel,
+            evidence_refs=[f"owner:{action_kind}"],
+            reason=reason,
+            requires_review=degraded and failure_count >= 2,
+            metadata={"owner_action_kind": action_kind, "degraded": degraded},
+        )
+    except Exception as exc:
+        log.debug("Owner procedure development-log: %s", exc)
+
+    return {
+        "id": proc_id,
+        "signature": signature,
+        "reliability": new_rel,
+        "degraded": degraded,
+        "success_count": success_count,
+        "failure_count": failure_count,
+    }
 
 
 def record_task_outcome(task: Any) -> dict | None:

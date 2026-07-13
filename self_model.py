@@ -415,6 +415,31 @@ class SelfModel:
         self._save(self.data)
         return after
 
+    def bump_value_strength(
+        self,
+        key: str,
+        *,
+        strength_delta: float = 0.01,
+        confidence_delta: float = 0.005,
+        reason: str = "",
+    ) -> dict[str, float]:
+        values = self.data.setdefault("value_state", {})
+        entry = dict(values.get(key) or {"strength": 0.5, "confidence": 0.4})
+        before_strength = float(entry.get("strength", 0.5) or 0.5)
+        before_confidence = float(entry.get("confidence", 0.4) or 0.4)
+        entry["strength"] = max(0.0, min(1.0, before_strength + float(strength_delta)))
+        entry["confidence"] = max(0.0, min(1.0, before_confidence + float(confidence_delta)))
+        values[key] = entry
+        self._save(self.data)
+        if reason:
+            AuditLog.development("value_update", "value", key, entry["strength"] - before_strength, reason)
+        return {
+            "strength_before": before_strength,
+            "strength_after": entry["strength"],
+            "confidence_before": before_confidence,
+            "confidence_after": entry["confidence"],
+        }
+
     @staticmethod
     def _normalize_compare_value(value: Any) -> str:
         return re.sub(r"\s+", " ", str(value or "").strip().lower())

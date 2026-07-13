@@ -669,8 +669,16 @@ class IsaacConfig:
         self.update_runtime_settings(raw.get("settings") or {})
 
     def _save_runtime_settings(self):
+        payload: dict[str, Any] = {"settings": self.runtime_settings()}
+        if RUNTIME_SETTINGS_PATH.exists():
+            try:
+                existing = json.loads(RUNTIME_SETTINGS_PATH.read_text(encoding="utf-8"))
+                if isinstance(existing.get("owner_autonomy"), dict):
+                    payload["owner_autonomy"] = existing["owner_autonomy"]
+            except Exception:
+                pass
         RUNTIME_SETTINGS_PATH.write_text(
-            json.dumps({"settings": self.runtime_settings()}, ensure_ascii=False, indent=2),
+            json.dumps(payload, ensure_ascii=False, indent=2),
             encoding="utf-8",
         )
 

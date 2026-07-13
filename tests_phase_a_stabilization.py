@@ -314,6 +314,89 @@ class TestCriticalBugs(unittest.TestCase):
         self.assertEqual(flow[0].action, "shell")
         self.assertEqual(flow[1].action, "screenshot")
 
+    def test_ui_automation_parses_hierarchy_and_taps_by_label(self):
+        from ui_automation import find_nodes, parse_bounds, parse_ui_xml, summarize_nodes
+
+        xml = """<?xml version='1.0' encoding='UTF-8' standalone='yes' ?>
+<hierarchy rotation="0">
+  <node text="Chrome" clickable="true" enabled="true" bounds="[0,100][200,180]" />
+  <node text="Einstellungen" clickable="true" enabled="true" bounds="[0,300][240,360]" />
+  <node text="Passwörter" content-desc="Passwörter" clickable="true" enabled="true" bounds="[0,420][240,480]" />
+</hierarchy>"""
+        nodes = parse_ui_xml(xml)
+        self.assertEqual(parse_bounds("[0,420][240,480]"), (0, 420, 240, 480))
+        matches = find_nodes(nodes, "Passwort")
+        self.assertEqual(len(matches), 1)
+        self.assertEqual(matches[0].center(), (120, 450))
+        summary = summarize_nodes(nodes)
+        self.assertIn("Einstellungen", summary)
+
+    def test_agent_ui_commands_parse(self):
+        from computer_use import parse_agent_body, parse_agent_flow
+
+        self.assertEqual(parse_agent_body("ui dump").action, "ui_dump")
+        self.assertEqual(parse_agent_body("ui list").action, "ui_list")
+        tap = parse_agent_body("ui tap Einstellungen")
+        self.assertEqual(tap.action, "ui_tap")
+        self.assertEqual(tap.params["text"], "Einstellungen")
+        self.assertEqual(parse_agent_body("ui unlock").action, "ui_unlock")
+        flow = parse_agent_flow("flow ui dump; ui tap Passwörter; ui key enter")
+        self.assertEqual([step.action for step in flow], ["ui_dump", "ui_tap", "ui_key"])
+
+    def test_credential_access_extracts_visible_login(self):
+        from credential_access import extract_visible_credentials
+        from ui_automation import parse_ui_xml
+
+        xml = """<hierarchy>
+          <node text="accounts.google.com" clickable="true" enabled="true" bounds="[0,100][300,160]" />
+          <node text="owner@example.com" clickable="false" enabled="true" bounds="[0,200][300,240]" />
+          <node text="S3cretPass!" password="true" clickable="false" enabled="true" bounds="[0,260][300,300]" />
+        </hierarchy>"""
+        records = extract_visible_credentials(parse_ui_xml(xml), site_hint="google")
+        self.assertEqual(len(records), 1)
+        self.assertEqual(records[0].username, "owner@example.com")
+        self.assertEqual(records[0].password, "S3cretPass!")
+
+    def test_credential_access_owner_gate(self):
+        from credential_access import require_credential_access
+        from unittest.mock import patch
+
+        with patch("credential_access.is_owner_equivalent_mode", return_value=False):
+            self.assertIn("Admin", require_credential_access() or "")
+
+    def test_agent_credential_commands_parse(self):
+        from computer_use import parse_agent_body
+
+        self.assertEqual(parse_agent_body("credential list").action, "credential_list")
+        read = parse_agent_body("credential read google.com --import")
+        self.assertEqual(read.action, "credential_read")
+        self.assertEqual(read.params["site"], "google.com")
+        self.assertTrue(read.params["import"])
+
+    def test_owner_action_detects_credential_read(self):
+        from owner_action import detect_owner_action
+        from unittest.mock import patch
+
+        with patch("owner_action.is_owner_equivalent_mode", return_value=True):
+            action = detect_owner_action("lies passwort für google aus chrome")
+        self.assertIsNotNone(action)
+        self.assertEqual(action.kind, "credential_access")
+        self.assertEqual(action.params.get("site"), "google")
+
+    def test_hermes_credential_access_requires_owner(self):
+        from hermes_compat import HermesComputerUseAdapter, ComputerAction, PermissionMetadata
+
+        cu = HermesComputerUseAdapter()
+        with patch("config.is_owner_equivalent_mode", return_value=False):
+            result = cu.validate(
+                ComputerAction(
+                    action="credential_read",
+                    params={"site": "google.com"},
+                    permission=PermissionMetadata(timeout=5, allowed_scope="local"),
+                )
+            )
+        self.assertFalse(result.ok)
+
     def test_capability_file_access_list_and_read(self):
         from file_access import parse_file_command, execute_file_command
         from unittest.mock import patch
@@ -1795,6 +1878,74 @@ class TestConstitutionOwnerOverride(unittest.TestCase):
         self.assertIsNotNone(action)
         self.assertEqual(action.kind, "find_files")
 
+    def test_owner_action_detects_datetime_status(self):
+        from owner_action import detect_owner_action
+
+        action = detect_owner_action("wie spät ist es")
+        self.assertIsNotNone(action)
+        self.assertEqual(action.kind, "device_status")
+        self.assertEqual(action.params.get("kind"), "datetime")
+
+    def test_owner_action_detects_process_status(self):
+        from owner_action import detect_owner_action
+
+        action = detect_owner_action("zeige prozesse")
+        self.assertIsNotNone(action)
+        self.assertEqual(action.kind, "device_status")
+        self.assertEqual(action.params.get("kind"), "processes")
+
+    def test_owner_action_detects_hotspot_toggle(self):
+        from owner_action import detect_owner_action
+
+        action = detect_owner_action("hotspot an")
+        self.assertIsNotNone(action)
+        self.assertEqual(action.kind, "device_toggle")
+        self.assertEqual(action.params.get("target"), "hotspot")
+
+    def test_owner_action_detects_speedtest(self):
+        from owner_action import detect_owner_action
+
+        action = detect_owner_action("speedtest")
+        self.assertIsNotNone(action)
+        self.assertEqual(action.kind, "network_test")
+        self.assertEqual(action.params.get("kind"), "speedtest")
+
+    def test_owner_action_detects_read_file(self):
+        from owner_action import detect_owner_action
+
+        action = detect_owner_action("lies datei ~/.bashrc")
+        self.assertIsNotNone(action)
+        self.assertEqual(action.kind, "file_operation")
+        self.assertEqual(action.params.get("operation"), "read")
+
+    def test_isaac_kernel_routes_owner_action_in_admin_mode(self):
+        kernel = IsaacKernel()
+
+        async def _run():
+            with patch("isaac_core.is_owner_equivalent_mode", return_value=True):
+                with patch(
+                    "owner_action.execute_owner_action",
+                    return_value=("[Owner] Test", True),
+                ) as execute_mock:
+                    result = await kernel.process("isaac status")
+            return result, execute_mock
+
+        result, execute_mock = asyncio.run(_run())
+        self.assertIn("[Owner] Test", result)
+        execute_mock.assert_awaited_once()
+
+    def test_record_owner_action_outcome_updates_procedure(self):
+        from procedure_memory import record_owner_action_outcome
+        from memory import get_memory
+
+        mem = get_memory()
+        outcome = record_owner_action_outcome(kind="isaac_ops", raw="isaac status", ok=True)
+        self.assertIsNotNone(outcome)
+        stored = mem.get_procedure_by_signature(outcome["signature"])
+        self.assertIsNotNone(stored)
+        self.assertEqual(stored.get("task_type"), "owner_action")
+        self.assertIn("owner:isaac_ops", stored.get("tools_used") or [])
+
     def test_override_prefix_with_sudo_allows_and_audits(self):
         from constitution_override import apply_constitution_gate, build_override_context
         from config import Level
@@ -2760,6 +2911,210 @@ class TestPhase4Connect(unittest.TestCase):
 
         hints = _procedure_hints_for_prompt("Suche Wetter Berlin eindeutig")
         self.assertIsInstance(hints, dict)
+
+    def test_owner_procedure_hints_map_weather_to_search_tool(self):
+        from procedure_memory import owner_procedure_hints_for_prompt, record_owner_action_outcome
+        from tool_runtime import _procedure_hints_for_prompt, _procedure_category_hint_for_prompt
+
+        record_owner_action_outcome(kind="weather", raw="zeige wetter in Berlin", ok=True)
+        hints, category = owner_procedure_hints_for_prompt("zeige wetter in München")
+        self.assertIn("isaac.search_web", hints)
+        self.assertGreater(hints["isaac.search_web"], 0.0)
+        self.assertEqual(category, "suche")
+
+        merged = _procedure_hints_for_prompt("zeige wetter in Hamburg")
+        self.assertIn("isaac.search_web", merged)
+        self.assertEqual(_procedure_category_hint_for_prompt("zeige wetter in Hamburg"), "suche")
+
+    def test_due_owner_tasks_respects_window_and_interval(self):
+        from datetime import datetime
+        from owner_autonomy import due_owner_tasks
+
+        last_runs = {"nightly_downloads_cleanup": datetime.now().isoformat()}
+        akku = {"plugged": True, "prozent": 80}
+        with patch("owner_autonomy.owner_autonomy_enabled", return_value=True):
+            due_night = due_owner_tasks(
+                last_runs=last_runs,
+                akku=akku,
+                now=datetime(2026, 7, 11, 3, 0, 0),
+            )
+            due_day = due_owner_tasks(
+                last_runs={},
+                akku=akku,
+                now=datetime(2026, 7, 12, 14, 0, 0),
+            )
+        self.assertEqual(due_night, [])
+        task_ids = {task.task_id for task in due_day}
+        self.assertIn("daily_isaac_health", task_ids)
+        self.assertNotIn("nightly_downloads_cleanup", task_ids)
+
+    def test_run_due_owner_autonomy_tasks_executes_and_records(self):
+        from datetime import datetime
+        from owner_autonomy import run_due_owner_autonomy_tasks
+
+        notes: list[str] = []
+
+        async def _run():
+            with patch("owner_autonomy.owner_autonomy_enabled", return_value=True):
+                with patch(
+                    "owner_action.execute_owner_action",
+                    return_value=("[Owner] OK", True),
+                ):
+                    return await run_due_owner_autonomy_tasks(
+                        last_runs={},
+                        akku={"plugged": True, "prozent": 90},
+                        on_note=notes.append,
+                        now=datetime(2026, 7, 12, 10, 0, 0),
+                    )
+
+        updated = asyncio.run(_run())
+        self.assertIn("daily_isaac_health", updated)
+        self.assertTrue(any("Owner-Autonomie" in note for note in notes))
+
+    def test_background_loop_owner_autonomy_cycle_updates_state(self):
+        from background_loop import BackgroundLoop
+
+        bg = BackgroundLoop()
+
+        async def _run():
+            with patch(
+                "owner_autonomy.run_due_owner_autonomy_tasks",
+                return_value={"daily_isaac_health": "2026-07-12T10:00:00"},
+            ) as run_mock:
+                await bg._owner_autonomy_zyklus({"plugged": True, "prozent": 90})
+            return run_mock
+
+        run_mock = asyncio.run(_run())
+        run_mock.assert_awaited_once()
+        self.assertEqual(
+            bg.state.owner_task_last_run.get("daily_isaac_health"),
+            "2026-07-12T10:00:00",
+        )
+
+    def test_owner_autonomy_runtime_settings_override_window(self):
+        import json
+        import tempfile
+        from owner_autonomy import get_scheduled_owner_tasks
+
+        payload = {
+            "settings": {},
+            "owner_autonomy": {
+                "enabled": True,
+                "tasks": {
+                    "daily_isaac_health": {
+                        "window_start_hour": 8,
+                        "window_end_hour": 20,
+                    }
+                },
+            },
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "runtime_settings.json"
+            path.write_text(json.dumps(payload), encoding="utf-8")
+            with patch("owner_autonomy.RUNTIME_SETTINGS_PATH", path):
+                tasks = {task.task_id: task for task in get_scheduled_owner_tasks()}
+        health = tasks["daily_isaac_health"]
+        self.assertEqual(health.window_start_hour, 8)
+        self.assertEqual(health.window_end_hour, 20)
+
+    def test_owner_autonomy_env_can_disable_weekly_task(self):
+        from owner_autonomy import get_scheduled_owner_tasks
+
+        with patch.dict(os.environ, {"ISAAC_OWNER_AUTONOMY_WEEKLY_ENABLED": "0"}, clear=False):
+            task_ids = {task.task_id for task in get_scheduled_owner_tasks()}
+        self.assertNotIn("weekly_deep_cleanup", task_ids)
+
+    def test_security_toolkit_parses_metasploit_run(self):
+        from security_toolkit import parse_security_command
+
+        with patch("security_toolkit.security_toolkit_enabled", return_value=True):
+            parsed = parse_security_command("nutze metasploit status")
+        self.assertIsNotNone(parsed)
+        self.assertEqual(parsed.get("action"), "run")
+        self.assertEqual(parsed.get("tool_id"), "metasploit")
+
+    def test_security_toolkit_parses_sync(self):
+        from security_toolkit import parse_security_command
+
+        with patch("security_toolkit.security_toolkit_enabled", return_value=True):
+            parsed = parse_security_command("sync security toolkit")
+        self.assertEqual(parsed.get("action"), "sync")
+
+    def test_owner_action_detects_security_toolkit(self):
+        from owner_action import detect_owner_action
+
+        with patch("owner_action.is_owner_equivalent_mode", return_value=True):
+            with patch("security_toolkit.security_toolkit_enabled", return_value=True):
+                action = detect_owner_action("zeige security toolkit")
+        self.assertIsNotNone(action)
+        self.assertEqual(action.kind, "security_toolkit")
+        self.assertEqual(action.params.get("action"), "list")
+
+    def test_security_workflow_matches_wifite_scan(self):
+        from security_workflows import match_workflow
+
+        with patch("security_workflows.workflows_enabled", return_value=True):
+            parsed = match_workflow("scanne mein wlan mit wifite")
+        self.assertIsNotNone(parsed)
+        self.assertEqual(parsed.get("action"), "workflow")
+        self.assertEqual(parsed.get("workflow_id"), "wlan_wifite_scan")
+
+    def test_security_workflow_matches_nethunter_bootstrap(self):
+        from security_workflows import match_workflow
+
+        with patch("security_workflows.workflows_enabled", return_value=True):
+            parsed = match_workflow("nethunter bootstrap")
+        self.assertEqual(parsed.get("workflow_id"), "nethunter_bootstrap")
+
+    def test_detect_nethunter_s8_native(self):
+        from security_workflows import detect_nethunter_environment
+
+        with patch("computer_use.detect_runtime", return_value="s8"):
+            nh = detect_nethunter_environment()
+        self.assertEqual(nh.get("mode"), "s8_native")
+        self.assertTrue(nh.get("available"))
+
+    def test_owner_action_detects_wlan_workflow(self):
+        from owner_action import detect_owner_action
+
+        with patch("owner_action.is_owner_equivalent_mode", return_value=True):
+            with patch("security_toolkit.security_toolkit_enabled", return_value=True):
+                with patch("security_workflows.workflows_enabled", return_value=True):
+                    action = detect_owner_action("analysiere mein wlan")
+        self.assertIsNotNone(action)
+        self.assertEqual(action.kind, "security_toolkit")
+        self.assertEqual(action.params.get("workflow_id"), "wlan_survey")
+
+    def test_security_toolkit_register_custom_tool(self):
+        import tempfile
+        from security_toolkit import register_custom_tool, CUSTOM_TOOLS_PATH
+
+        with tempfile.TemporaryDirectory() as tmp:
+            custom_path = Path(tmp) / "custom.json"
+            with patch("security_toolkit.CUSTOM_TOOLS_PATH", custom_path):
+                with patch("security_toolkit.security_toolkit_enabled", return_value=True):
+                    out = register_custom_tool(
+                        tool_id="myscanner",
+                        display_name="My Scanner",
+                        install_command="apt install -y myscanner",
+                    )
+            self.assertTrue(out.get("ok"))
+
+    def test_owner_autonomy_env_overrides_nightly_window(self):
+        from owner_autonomy import get_scheduled_owner_tasks
+
+        with patch.dict(
+            os.environ,
+            {
+                "ISAAC_OWNER_AUTONOMY_NIGHTLY_START": "1",
+                "ISAAC_OWNER_AUTONOMY_NIGHTLY_END": "4",
+            },
+            clear=False,
+        ):
+            tasks = {task.task_id: task for task in get_scheduled_owner_tasks()}
+        nightly = tasks["nightly_downloads_cleanup"]
+        self.assertEqual(nightly.window_start_hour, 1)
+        self.assertEqual(nightly.window_end_hour, 4)
 
 
 if __name__ == '__main__':

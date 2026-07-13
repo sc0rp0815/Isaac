@@ -221,14 +221,58 @@ class IsaacKernel:
         t0 = time.monotonic()
 
         if is_owner_equivalent_mode():
+            from decision_trace import DecisionTrace, TracePhase, audit_routing_trace
             from owner_action import detect_owner_action, execute_owner_action
+            from procedure_memory import record_owner_action_outcome
 
             owner_action = detect_owner_action(user_input)
             if owner_action:
                 AuditLog.steffen_input(user_input)
                 emp = self.empathie.analysiere(user_input)
+                trace = DecisionTrace()
+                trace.add(
+                    TracePhase.CLASSIFICATION,
+                    "owner_action_detected",
+                    {
+                        "kind": owner_action.kind,
+                        "params": dict(owner_action.params or {}),
+                        "privilege_mode": "admin",
+                    },
+                )
                 result, ok = await execute_owner_action(owner_action)
                 timing["owner_action_ms"] = round((time.perf_counter() - t_start) * 1000, 2)
+                trace.add(
+                    TracePhase.EXECUTION,
+                    "owner_action_executed",
+                    {
+                        "kind": owner_action.kind,
+                        "ok": ok,
+                        "duration_ms": timing["owner_action_ms"],
+                    },
+                )
+                audit_routing_trace(
+                    trace,
+                    intent=f"owner:{owner_action.kind}",
+                    outcome="success" if ok else "failed",
+                )
+                try:
+                    record_owner_action_outcome(
+                        kind=owner_action.kind,
+                        raw=user_input,
+                        ok=ok,
+                    )
+                except Exception as exc:
+                    log.debug("Owner procedure capture skipped: %s", exc)
+                if ok:
+                    try:
+                        get_self_model().bump_value_strength(
+                            "autonomy",
+                            strength_delta=0.008,
+                            confidence_delta=0.004,
+                            reason=f"owner_action:{owner_action.kind}",
+                        )
+                    except Exception as exc:
+                        log.debug("SelfModel autonomy bump skipped: %s", exc)
                 log.info(
                     "OwnerAction | kind=%s ok=%s ms=%s input='%s'",
                     owner_action.kind,
@@ -1000,6 +1044,8 @@ class IsaacKernel:
                 "  agent: shell ls -la workspace\n"
                 "  agent: clipboard get\n"
                 "  agent: open https://github.com\n"
+                "  agent: ui dump | ui list | ui tap Einstellungen | ui unlock | ui key enter\n"
+                "  agent: credential list | credential read SITE [--import] | credential screen\n"
                 "  agent: flow shell pwd; screenshot; shell ls workspace\n"
                 f"Fehler: {exc}"
             )

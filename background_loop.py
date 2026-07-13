@@ -37,6 +37,8 @@ class BackgroundState:
     letzter_decay:      float = 0.0
     letzter_ideen:      float = 0.0
     letzter_provider:   float = 0.0
+    letzter_owner_autonomy: float = 0.0
+    owner_task_last_run: dict = field(default_factory=dict)
     zyklen:             int   = 0
     dialoge_gesamt:     int   = 0
     diskussionen_gesamt: int  = 0
@@ -66,6 +68,7 @@ class BackgroundLoop:
     RESEARCH_INTERVAL   = 2400     # 40 Minuten
     DUMP_INTERVAL       = 600      # 10 Minuten
     DECAY_INTERVAL      = 3600     # 1 Stunde
+    OWNER_AUTONOMY_INTERVAL = 3600  # 1 Stunde
     TICK                = 30       # MOBILE: Größerer Tick-Abstand
 
     # MOBILE: Sparmodus ab 30%
@@ -212,6 +215,13 @@ class BackgroundLoop:
                     self._notiere(f"Verhaltensanpassung: {decisions}")
                     self._last_value_decision = now
 
+                # Proaktive Owner-Autonomie (Admin-Modus, Intervall-Check)
+                if now - self.state.letzter_owner_autonomy > self._intervall(
+                    self.OWNER_AUTONOMY_INTERVAL, akku
+                ):
+                    await self._owner_autonomy_zyklus(akku)
+                    self.state.letzter_owner_autonomy = now
+
                 # State Dump
                 if now - self.state.letzter_dump > self.DUMP_INTERVAL:
                     self._dump_state()
@@ -273,6 +283,18 @@ class BackgroundLoop:
         except Exception as e:
             log.debug(f"Knowledge-Check: {e}")
 
+    async def _owner_autonomy_zyklus(self, akku: dict):
+        try:
+            from owner_autonomy import run_due_owner_autonomy_tasks
+
+            self.state.owner_task_last_run = await run_due_owner_autonomy_tasks(
+                last_runs=dict(self.state.owner_task_last_run or {}),
+                akku=akku,
+                on_note=self._notiere,
+            )
+        except Exception as e:
+            log.debug("Owner-Autonomie-Zyklus: %s", e)
+
     async def _decay_check(self):
         try:
             from forgetting_decay import run_decay_cycle
@@ -322,6 +344,8 @@ class BackgroundLoop:
             data = {
                 "letzter_health":     self.state.letzter_health,
                 "letzter_ki_dialog":  self.state.letzter_ki_dialog,
+                "letzter_owner_autonomy": self.state.letzter_owner_autonomy,
+                "owner_task_last_run": dict(self.state.owner_task_last_run or {}),
                 "zyklen":             self.state.zyklen,
                 "dialoge_gesamt":     self.state.dialoge_gesamt,
                 "ideen_gesamt":       self.state.ideen_gesamt,
@@ -362,6 +386,7 @@ class BackgroundLoop:
             "ideen_gesamt":      self.state.ideen_gesamt,
             "ideen_queue":       len(self._ideenqueue),
             "puffer":            len(self._puffer),
+            "owner_autonomy_runs": dict(self.state.owner_task_last_run or {}),
         }
 
 

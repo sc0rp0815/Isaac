@@ -156,10 +156,23 @@ class HermesComputerUseAdapter:
         "screenshot", "browser_navigate", "browser_click", "browser_type", "browser_extract",
         "file_read", "file_write", "shell_command", "wait", "observe",
         "clipboard_get", "clipboard_set", "open", "tap", "type_text", "swipe",
+        "ui_dump", "ui_list", "ui_tap", "ui_unlock", "ui_key",
+        "credential_access", "credential_list", "credential_screen", "credential_read", "credential_internal",
     }
-    BLOCKED_ACTIONS = {"file_delete", "credential_access", "privilege_escalation", "background_persist"}
+    BLOCKED_ACTIONS = {"file_delete", "privilege_escalation", "background_persist"}
+    OWNER_ONLY_ACTIONS = {
+        "credential_access",
+        "credential_list",
+        "credential_screen",
+        "credential_read",
+        "credential_internal",
+    }
 
     def validate(self, action: ComputerAction) -> ToolResult:
+        from config import is_owner_equivalent_mode
+
+        if action.action in self.OWNER_ONLY_ACTIONS and not is_owner_equivalent_mode():
+            return ToolResult(ok=False, error=f"Owner-only action: {action.action}")
         if action.action in self.BLOCKED_ACTIONS:
             return ToolResult(ok=False, error=f"Blocked action: {action.action}")
         if action.action not in self.ALLOWED_ACTIONS:
@@ -217,6 +230,29 @@ class HermesComputerUseAdapter:
             return AgentAction("type_text", {"text": params.get("text", "")})
         if name == "swipe":
             return AgentAction("swipe", params)
+        if name == "ui_dump":
+            return AgentAction("ui_dump")
+        if name == "ui_list":
+            return AgentAction("ui_list")
+        if name == "ui_tap":
+            return AgentAction("ui_tap", {"text": params.get("text", "")})
+        if name == "ui_unlock":
+            return AgentAction("ui_unlock")
+        if name == "ui_key":
+            return AgentAction("ui_key", {"code": params.get("code", "")})
+        if name == "credential_list":
+            return AgentAction("credential_list")
+        if name == "credential_screen":
+            return AgentAction("credential_screen", {"site": params.get("site", "")})
+        if name == "credential_read":
+            return AgentAction(
+                "credential_read",
+                {"site": params.get("site", ""), "import": bool(params.get("import"))},
+            )
+        if name == "credential_internal":
+            return AgentAction("credential_internal", {"site": params.get("site", "")})
+        if name == "credential_access":
+            return AgentAction("credential_read", {"site": params.get("site", ""), "import": bool(params.get("import"))})
         return None
 
 
