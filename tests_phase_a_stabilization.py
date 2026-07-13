@@ -397,6 +397,22 @@ class TestCriticalBugs(unittest.TestCase):
             )
         self.assertFalse(result.ok)
 
+    def test_termux_bridge_diagnose_structure(self):
+        from termux_bridge import diagnose_bridge, bridge_enabled
+
+        diag = diagnose_bridge()
+        self.assertIn("enabled", diag)
+        self.assertIn("mode", diag)
+        self.assertIn("tools", diag)
+        self.assertEqual(diag["enabled"], bridge_enabled())
+
+    def test_termux_bridge_rejects_empty_command(self):
+        from termux_bridge import run_termux_command
+        import asyncio
+
+        result = asyncio.run(run_termux_command([]))
+        self.assertFalse(result.get("ok"))
+
     def test_capability_file_access_list_and_read(self):
         from file_access import parse_file_command, execute_file_command
         from unittest.mock import patch

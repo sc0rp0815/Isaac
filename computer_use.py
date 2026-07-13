@@ -28,6 +28,13 @@ TERMUX_API_HINT = (
     "  4) termux-setup-storage (für Speicher-Zugriff)\n"
     "  5) Isaac neu starten, dann: agent: diagnose"
 )
+S8_TERMUX_BRIDGE_HINT = (
+    "S8-Chroot → Termux-Brücke fehlt. Fix:\n"
+    "  1) In Termux: pkg install termux-api openssh tsu\n"
+    "  2) Termux:API-App installieren und Berechtigungen erlauben\n"
+    "  3) bash scripts/setup_termux_bridge.sh\n"
+    "  4) Isaac neu starten, dann: agent: diagnose"
+)
 BLOCKED_SHELL_FRAGMENTS = (
     "sudo ",
     "rm -rf",
@@ -249,6 +256,18 @@ class ComputerUseRuntime:
         self.runtime = detect_runtime()
         screenshot_dir()
 
+    def _uses_termux_bridge(self) -> bool:
+        return self.runtime == "s8"
+
+    async def _termux_bridge_available(self) -> bool:
+        if not self._uses_termux_bridge():
+            return False
+        try:
+            from termux_bridge import bridge_available
+            return bridge_available()
+        except Exception:
+            return False
+
     async def execute(self, action: AgentAction, *, dry_run: bool = False) -> dict[str, Any]:
         if not computer_use_enabled():
             return {"ok": False, "error": "Computer-Use ist deaktiviert (computer_use_enabled=false)"}
@@ -333,6 +352,15 @@ class ComputerUseRuntime:
 
     async def _diagnose(self, params: dict[str, Any]) -> dict[str, Any]:
         checks: list[dict[str, Any]] = []
+        bridge_diag: dict[str, Any] = {}
+        if self._uses_termux_bridge():
+            try:
+                from termux_bridge import diagnose_bridge
+                bridge_diag = diagnose_bridge()
+                for name, available in (bridge_diag.get("tools") or {}).items():
+                    checks.append({"tool": name, "available": bool(available), "via": "termux_bridge"})
+            except Exception as exc:
+                bridge_diag = {"error": str(exc)}
         for name in (
             "termux-screenshot",
             "termux-clipboard-get",
@@ -340,6 +368,8 @@ class ComputerUseRuntime:
             "termux-battery-status",
             "input",
         ):
+            if any(row.get("tool") == name for row in checks):
+                continue
             checks.append({"tool": name, "available": _command_exists(name)})
 
         dir_ok = False
@@ -354,6 +384,11 @@ class ComputerUseRuntime:
 
         probe = await self._shell({"command": "pwd && whoami"})
         shot = await self._screenshot({})
+        hint = ""
+        if self.runtime == "termux":
+            hint = TERMUX_API_HINT
+        elif self._uses_termux_bridge() and not shot.get("ok"):
+            hint = S8_TERMUX_BRIDGE_HINT
         return {
             "ok": True,
             "runtime": self.runtime,
@@ -364,9 +399,10 @@ class ComputerUseRuntime:
             "screenshot_dir_ok": dir_ok,
             "screenshot_dir_error": dir_error,
             "tool_checks": checks,
+            "termux_bridge": bridge_diag,
             "shell_probe": probe,
             "screenshot_probe": shot,
-            "hint": TERMUX_API_HINT if self.runtime == "termux" else "",
+            "hint": hint,
         }
 
     async def _screenshot(self, params: dict[str, Any]) -> dict[str, Any]:
@@ -394,6 +430,23 @@ class ComputerUseRuntime:
                 err = (stderr or b"").decode(errors="replace").strip() or "termux-screenshot fehlgeschlagen"
                 hint = _permission_hint(err)
                 return {"ok": False, "error": err, "hint": hint or TERMUX_API_HINT}
+        elif await self._termux_bridge_available():
+            from shutil import copy2
+            from termux_bridge import bridge_work_dir, run_termux_command
+
+            remote = bridge_work_dir() / f"isaac_{int(time.time())}.png"
+            result = await run_termux_command(["termux-screenshot", "-o", str(remote)], timeout=25.0)
+            if not result.get("ok"):
+                return {
+                    "ok": False,
+                    "error": result.get("error", "termux-screenshot via Brücke fehlgeschlagen"),
+                    "hint": S8_TERMUX_BRIDGE_HINT,
+                    "via": result.get("via"),
+                }
+            if remote.exists():
+                copy2(remote, path)
+            elif not path.exists():
+                return {"ok": False, "error": f"Screenshot nicht lesbar: {remote}", "hint": S8_TERMUX_BRIDGE_HINT}
         elif _command_exists("scrot"):
             proc = await asyncio.create_subprocess_exec(
                 "scrot",
@@ -419,7 +472,7 @@ class ComputerUseRuntime:
                     "Kein Screenshot-Tool. Termux: pkg install termux-api + Termux:API-App. "
                     "Linux: scrot oder imagemagick."
                 ),
-                "hint": TERMUX_API_HINT if self.runtime == "termux" else "",
+                "hint": TERMUX_API_HINT if self.runtime == "termux" else S8_TERMUX_BRIDGE_HINT,
             }
 
         if not path.exists():
@@ -454,6 +507,11 @@ class ComputerUseRuntime:
         }
 
     async def _clipboard_get(self, params: dict[str, Any]) -> dict[str, Any]:
+        if await self._termux_bridge_available():
+            from termux_bridge import run_termux_command
+            result = await run_termux_command(["termux-clipboard-get"], timeout=12.0)
+            if result.get("ok"):
+                return {"ok": True, "text": (result.get("stdout") or "")[:4000], "via": result.get("via")}
         if self.runtime == "termux" and _command_exists("termux-clipboard-get"):
             proc = await asyncio.create_subprocess_exec(
                 "termux-clipboard-get",
@@ -479,6 +537,11 @@ class ComputerUseRuntime:
 
     async def _clipboard_set(self, params: dict[str, Any]) -> dict[str, Any]:
         text = str(params.get("text") or "")
+        if await self._termux_bridge_available():
+            from termux_bridge import run_termux_command
+            result = await run_termux_command(["termux-clipboard-set", text], timeout=12.0)
+            if result.get("ok"):
+                return {"ok": True, "length": len(text), "via": result.get("via")}
         if self.runtime == "termux" and _command_exists("termux-clipboard-set"):
             proc = await asyncio.create_subprocess_exec(
                 "termux-clipboard-set",
@@ -507,6 +570,12 @@ class ComputerUseRuntime:
         target = (params.get("target") or "").strip().strip("\"'")
         if not target:
             return {"ok": False, "error": "Leeres Ziel"}
+        if await self._termux_bridge_available():
+            from termux_bridge import run_termux_command
+            if target.startswith(("http://", "https://")):
+                result = await run_termux_command(["termux-open-url", target], timeout=15.0)
+                if result.get("ok"):
+                    return {"ok": True, "opened": target, "via": result.get("via") or "termux_bridge"}
         if self.runtime == "termux":
             if target.startswith(("http://", "https://")) and _command_exists("termux-open-url"):
                 proc = await asyncio.create_subprocess_exec(
@@ -539,6 +608,11 @@ class ComputerUseRuntime:
 
     async def _tap(self, params: dict[str, Any]) -> dict[str, Any]:
         x, y = int(params.get("x", 0)), int(params.get("y", 0))
+        if await self._termux_bridge_available():
+            from termux_bridge import run_android_input
+            result = await run_android_input(["tap", str(x), str(y)], timeout=12.0)
+            if result.get("ok"):
+                return {"ok": True, "x": x, "y": y, "via": result.get("via")}
         if _command_exists("input"):
             proc = await asyncio.create_subprocess_exec(
                 "input",
@@ -572,6 +646,11 @@ class ComputerUseRuntime:
 
     async def _type_text(self, params: dict[str, Any]) -> dict[str, Any]:
         text = str(params.get("text") or "")
+        if await self._termux_bridge_available():
+            from termux_bridge import run_android_input
+            result = await run_android_input(["text", text.replace(" ", "%s")], timeout=20.0)
+            if result.get("ok"):
+                return {"ok": True, "length": len(text), "via": result.get("via")}
         if _command_exists("xdotool"):
             proc = await asyncio.create_subprocess_exec(
                 "xdotool",
@@ -609,6 +688,21 @@ class ComputerUseRuntime:
         return {"ok": False, "error": "Texteingabe nicht verfügbar (xdotool/input/clipboard)"}
 
     async def _swipe(self, params: dict[str, Any]) -> dict[str, Any]:
+        if await self._termux_bridge_available():
+            from termux_bridge import run_android_input
+            result = await run_android_input(
+                [
+                    "swipe",
+                    str(params.get("x1")),
+                    str(params.get("y1")),
+                    str(params.get("x2")),
+                    str(params.get("y2")),
+                    str(params.get("ms", 300)),
+                ],
+                timeout=15.0,
+            )
+            if result.get("ok"):
+                return {"ok": True, **params, "via": result.get("via")}
         if not _command_exists("input"):
             return {"ok": False, "error": "Swipe benötigt Android input-Befehl (adb)"}
         proc = await asyncio.create_subprocess_exec(
@@ -634,6 +728,13 @@ class ComputerUseRuntime:
 
     async def _capture_ui_nodes(self) -> tuple[list[Any], str]:
         from ui_automation import UI_DUMP_COMMANDS, extract_ui_dump, parse_ui_xml
+
+        if await self._termux_bridge_available():
+            from termux_bridge import run_ui_dump
+            result = await run_ui_dump(timeout=35.0)
+            xml_text = extract_ui_dump(result.get("stdout", ""))
+            if result.get("ok") and xml_text:
+                return parse_ui_xml(xml_text), f"termux_bridge:{result.get('via', 'ui_dump')}"
 
         errors: list[str] = []
         for command in UI_DUMP_COMMANDS:
@@ -709,12 +810,19 @@ class ComputerUseRuntime:
     async def _ui_key(self, params: dict[str, Any]) -> dict[str, Any]:
         from ui_automation import android_keycode, audit_ui_action
 
-        if not _command_exists("input"):
+        if not _command_exists("input") and not await self._termux_bridge_available():
             return {"ok": False, "error": "ui key benötigt Android input-Befehl"}
         try:
             code = android_keycode(str(params.get("code") or ""))
         except ValueError as exc:
             return {"ok": False, "error": str(exc)}
+        if await self._termux_bridge_available():
+            from termux_bridge import run_android_input
+            result = await run_android_input(["keyevent", str(code)], timeout=10.0)
+            if not result.get("ok"):
+                return {"ok": False, "error": result.get("error", "keyevent failed")}
+            audit_ui_action("ui_key", f"code={code}")
+            return {"ok": True, "code": code, "via": result.get("via")}
         proc = await asyncio.create_subprocess_exec(
             "input",
             "keyevent",
@@ -880,24 +988,39 @@ class ComputerUseRuntime:
                     "lokal (Dashboard/Secrets) — niemals im Chat."
                 ),
             }
-        if not _command_exists("input"):
+        use_bridge = await self._termux_bridge_available()
+        if not _command_exists("input") and not use_bridge:
             return {"ok": False, "error": "ui unlock benötigt Android input-Befehl"}
         for code in pin_keycodes(pin):
-            proc = await asyncio.create_subprocess_exec(
-                "input",
-                "keyevent",
-                str(code),
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-            )
-            _, stderr = await asyncio.wait_for(proc.communicate(), timeout=8)
-            if proc.returncode != 0:
-                return {"ok": False, "error": (stderr or b"unlock keyevent failed").decode(errors="replace")}
+            if use_bridge:
+                from termux_bridge import run_android_input
+                result = await run_android_input(["keyevent", str(code)], timeout=8.0)
+                if not result.get("ok"):
+                    return {"ok": False, "error": result.get("error", "unlock keyevent failed")}
+            else:
+                proc = await asyncio.create_subprocess_exec(
+                    "input",
+                    "keyevent",
+                    str(code),
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                )
+                _, stderr = await asyncio.wait_for(proc.communicate(), timeout=8)
+                if proc.returncode != 0:
+                    return {"ok": False, "error": (stderr or b"unlock keyevent failed").decode(errors="replace")}
             await asyncio.sleep(0.12)
         audit_ui_action("ui_unlock", f"ref={DEVICE_PIN_SECRET_REF} digits={len(pin)}")
         return {"ok": True, "digits": len(pin), "ref": DEVICE_PIN_SECRET_REF}
 
     async def _termux_battery(self) -> dict[str, Any]:
+        if await self._termux_bridge_available():
+            from termux_bridge import run_termux_command
+            result = await run_termux_command(["termux-battery-status"], timeout=8.0)
+            if result.get("ok"):
+                try:
+                    return json.loads(result.get("stdout") or "{}")
+                except Exception:
+                    return {}
         if not _command_exists("termux-battery-status"):
             return {}
         proc = await asyncio.create_subprocess_exec(
@@ -928,6 +1051,12 @@ class ComputerUseRuntime:
         if _command_exists("input"):
             caps.append("ui_tap")
             caps.append("ui_unlock")
+        try:
+            from termux_bridge import bridge_available
+            if bridge_available():
+                caps.append("termux_bridge")
+        except Exception:
+            pass
         return sorted(set(caps))
 
 
@@ -968,6 +1097,9 @@ def format_agent_result(result: dict[str, Any]) -> str:
             probe = result.get("screenshot_probe") or {}
             if probe:
                 lines.append(f"screenshot_test: {'OK' if probe.get('ok') else probe.get('error', 'fail')}")
+            bridge = result.get("termux_bridge") or {}
+            if bridge:
+                lines.append(f"termux_bridge: mode={bridge.get('mode', '-')} enabled={bridge.get('enabled')}")
             if result.get("hint"):
                 lines.append(str(result["hint"]))
             return "\n".join(lines)

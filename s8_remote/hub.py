@@ -25,6 +25,20 @@ DEFAULT_PORT = int(os.getenv("S8_HUB_PORT", "8768"))
 DEFAULT_BIND = os.getenv("S8_HUB_BIND", "0.0.0.0")
 TOKEN = os.getenv("S8_HUB_TOKEN", "").strip()
 CONFIG_PATH = Path(os.getenv("S8_HUB_CONFIG", Path(__file__).resolve().parent / "agents.json"))
+ALLOWED_TERMUX_COMMANDS = frozenset({
+    "termux-screenshot",
+    "termux-clipboard-get",
+    "termux-clipboard-set",
+    "termux-open-url",
+    "termux-battery-status",
+    "termux-location",
+    "termux-wake-lock",
+    "input",
+    "sh",
+    "uiautomator",
+    "adb",
+    "tsu",
+})
 
 
 def expand(path: str) -> Path:
@@ -274,6 +288,16 @@ class HubHandler(BaseHTTPRequestHandler):
             return self._unauthorized()
         cfg = load_config()
         body = self._read_json()
+
+        if path == "/termux/exec":
+            argv = body.get("argv") or []
+            if not isinstance(argv, list) or not argv:
+                return self._send(400, {"ok": False, "error": "argv fehlt"})
+            command = str(argv[0] or "").strip()
+            if command not in ALLOWED_TERMUX_COMMANDS:
+                return self._send(403, {"ok": False, "error": f"befehl nicht erlaubt: {command}"})
+            cmd = [str(part) for part in argv]
+            return self._send(200, {"ok": True, "result": run_cmd(cmd, timeout=int(body.get("timeout", 30)))})
 
         if path == "/camera":
             camera = str(body.get("camera", (query.get("camera") or ["0"])[0]))
