@@ -38,7 +38,9 @@ class BackgroundState:
     letzter_ideen:      float = 0.0
     letzter_provider:   float = 0.0
     letzter_owner_autonomy: float = 0.0
+    letzter_goal_autonomy: float = 0.0
     owner_task_last_run: dict = field(default_factory=dict)
+    goal_autonomy_ticks: int = 0
     zyklen:             int   = 0
     dialoge_gesamt:     int   = 0
     diskussionen_gesamt: int  = 0
@@ -69,6 +71,7 @@ class BackgroundLoop:
     DUMP_INTERVAL       = 600      # 10 Minuten
     DECAY_INTERVAL      = 3600     # 1 Stunde
     OWNER_AUTONOMY_INTERVAL = 3600  # 1 Stunde
+    GOAL_AUTONOMY_INTERVAL = 900    # 15 Minuten — Ziel-Motivation
     TICK                = 30       # MOBILE: Größerer Tick-Abstand
 
     # MOBILE: Sparmodus ab 30%
@@ -222,6 +225,13 @@ class BackgroundLoop:
                     await self._owner_autonomy_zyklus(akku)
                     self.state.letzter_owner_autonomy = now
 
+                # Goal-directed Autonomie (Motivation → Subgoal-Tasks)
+                if now - self.state.letzter_goal_autonomy > self._intervall(
+                    self.GOAL_AUTONOMY_INTERVAL, akku
+                ):
+                    await self._goal_autonomy_zyklus()
+                    self.state.letzter_goal_autonomy = now
+
                 # State Dump
                 if now - self.state.letzter_dump > self.DUMP_INTERVAL:
                     self._dump_state()
@@ -295,6 +305,22 @@ class BackgroundLoop:
         except Exception as e:
             log.debug("Owner-Autonomie-Zyklus: %s", e)
 
+    async def _goal_autonomy_zyklus(self):
+        """Motivation-Tick: aktive Steffen-Ziele → Subgoal-Tasks."""
+        try:
+            from motivation import run_goal_motivation_cycle
+
+            result = await run_goal_motivation_cycle(on_note=self._notiere, submit_tasks=True)
+            if result.get("tasks"):
+                self.state.goal_autonomy_ticks = int(self.state.goal_autonomy_ticks or 0) + 1
+                log.info(
+                    "Goal-Autonomie: tasks=%s subgoals_created=%s",
+                    result.get("tasks"),
+                    result.get("subgoals_created"),
+                )
+        except Exception as e:
+            log.debug("Goal-Autonomie-Zyklus: %s", e)
+
     async def _decay_check(self):
         try:
             from forgetting_decay import run_decay_cycle
@@ -345,7 +371,9 @@ class BackgroundLoop:
                 "letzter_health":     self.state.letzter_health,
                 "letzter_ki_dialog":  self.state.letzter_ki_dialog,
                 "letzter_owner_autonomy": self.state.letzter_owner_autonomy,
+                "letzter_goal_autonomy": self.state.letzter_goal_autonomy,
                 "owner_task_last_run": dict(self.state.owner_task_last_run or {}),
+                "goal_autonomy_ticks": int(self.state.goal_autonomy_ticks or 0),
                 "zyklen":             self.state.zyklen,
                 "dialoge_gesamt":     self.state.dialoge_gesamt,
                 "ideen_gesamt":       self.state.ideen_gesamt,
@@ -387,6 +415,8 @@ class BackgroundLoop:
             "ideen_queue":       len(self._ideenqueue),
             "puffer":            len(self._puffer),
             "owner_autonomy_runs": dict(self.state.owner_task_last_run or {}),
+            "goal_autonomy_ticks": int(self.state.goal_autonomy_ticks or 0),
+            "letzter_goal_autonomy": self.state.letzter_goal_autonomy,
         }
 
 

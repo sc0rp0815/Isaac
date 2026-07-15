@@ -1545,6 +1545,19 @@ class IsaacKernel:
             lines.append("")
         except Exception:
             pass
+        try:
+            from motivation import pick_motivation_decision, goal_autonomy_enabled
+
+            if goal_autonomy_enabled():
+                dec = pick_motivation_decision()
+                if dec:
+                    lines.append(
+                        f"Nächste Motivation: {dec.goal_title[:40]} → {dec.subgoal_title[:40]} "
+                        f"(score={dec.score})"
+                    )
+                    lines.append("")
+        except Exception:
+            pass
         for p in sorted(bl, key=lambda x: x["score"], reverse=True):
             lines.append(
                 f"  {p['name']:12} Score:{p['score']:.1f} "

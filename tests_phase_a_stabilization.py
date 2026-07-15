@@ -3287,6 +3287,79 @@ class TestPhase4Connect(unittest.TestCase):
             # Normal chat must not be classified as goal
             self.assertEqual(detect_intent("Erkläre mir das Wetter als Motiv"), Intent.CHAT)
 
+    def test_motivation_creates_subgoal_and_ranks(self):
+        import tempfile
+        from goal_store import reset_goal_store_for_tests
+        from motivation import (
+            ensure_subgoals_for_active_goals,
+            pick_motivation_decision,
+            rank_motivation_decisions,
+        )
+        from decision_trace import TracePhase
+
+        self.assertEqual(TracePhase.MOTIVATION.value, "motivation")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            store = reset_goal_store_for_tests(Path(tmp) / "g.json")
+            store.add_owner_goal("Autonomie verbessern", priority=0.9)
+            created = ensure_subgoals_for_active_goals(store)
+            self.assertEqual(len(created), 1)
+            # second call idempotent
+            self.assertEqual(len(ensure_subgoals_for_active_goals(store)), 0)
+            dec = pick_motivation_decision(store)
+            self.assertIsNotNone(dec)
+            self.assertEqual(dec.goal_title, "Autonomie verbessern")
+            self.assertGreater(dec.score, 0)
+            ranked = rank_motivation_decisions(store, limit=5)
+            self.assertEqual(len(ranked), 1)
+
+    def test_motivation_cycle_enqueues_task_without_tools_by_default(self):
+        import tempfile
+        from goal_store import reset_goal_store_for_tests
+        from motivation import run_goal_motivation_cycle
+        from executor import get_executor, TaskStatus
+        from decision_trace import TracePhase
+
+        notes: list[str] = []
+
+        async def _run():
+            with tempfile.TemporaryDirectory() as tmp:
+                store = reset_goal_store_for_tests(Path(tmp) / "g.json")
+                store.add_owner_goal("Stabilen Kernel halten", priority=0.8)
+                with patch("motivation.goal_autonomy_enabled", return_value=True):
+                    return await run_goal_motivation_cycle(
+                        on_note=notes.append,
+                        submit_tasks=False,
+                        store=store,
+                    )
+
+        result = asyncio.run(_run())
+        self.assertTrue(result["ok"])
+        self.assertEqual(len(result["tasks"]), 1)
+        self.assertTrue(any("Goal-Autonomie" in n for n in notes))
+        task = get_executor().get_task(result["tasks"][0])
+        self.assertIsNotNone(task)
+        self.assertFalse(task.strategy.allow_tools)
+        phases = [e.phase for e in task.decision_trace.entries]
+        self.assertIn(TracePhase.MOTIVATION, phases)
+
+    def test_background_goal_autonomy_cycle_invokes_motivation(self):
+        from background_loop import BackgroundLoop
+
+        bg = BackgroundLoop()
+
+        async def _run():
+            with patch(
+                "motivation.run_goal_motivation_cycle",
+                return_value={"ok": True, "tasks": ["abc"], "subgoals_created": 1},
+            ) as mock_run:
+                await bg._goal_autonomy_zyklus()
+            return mock_run
+
+        mock_run = asyncio.run(_run())
+        mock_run.assert_awaited_once()
+        self.assertEqual(bg.state.goal_autonomy_ticks, 1)
+
     def test_e2_trace_phases_include_evaluation_and_learning(self):
         """Evolution 2.0: DecisionTrace deckt Evaluation und Learning ab."""
         self.assertEqual(TracePhase.EVALUATION.value, "evaluation")

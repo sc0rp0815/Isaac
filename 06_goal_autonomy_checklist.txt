@@ -20,12 +20,14 @@ S1 GOAL STORE + PROMPT
 [ ] Retrieval: active goals in build_retrieval_context (Slice 1b optional)
 
 ──────────────────────────────────────────────────────────────────────────────
-S2 MOTIVATION + TICK (nächster PR)
+S2 MOTIVATION + TICK
 ──────────────────────────────────────────────────────────────────────────────
-[ ] motivation.py Scoring
-[ ] background_loop Goal-Tick
-[ ] Subgoal auto-create für active goals
-[ ] DecisionTrace motivation phase
+[x] motivation.py Scoring
+[x] background_loop Goal-Tick (GOAL_AUTONOMY_INTERVAL)
+[x] Subgoal auto-create für active goals
+[x] DecisionTrace MOTIVATION phase
+[x] Status: nächste Motivation
+[ ] Research-Tools default nur bei Research-Zielen (partial: title heuristic)
 
 ──────────────────────────────────────────────────────────────────────────────
 S3+ RESEARCH / LEARN (später)

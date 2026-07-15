@@ -11,6 +11,7 @@ class TracePhase(Enum):
     CLASSIFICATION = "classification"
     RETRIEVAL = "retrieval"
     STRATEGY = "strategy"
+    MOTIVATION = "motivation"
     ELIGIBILITY = "eligibility"
     SELECTION = "selection"
     EXECUTION = "execution"
