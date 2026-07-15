@@ -9,7 +9,7 @@ import json
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from executor import Executor, Strategy, Task, TaskStatus, TaskType
 from decision_trace import DecisionTrace, TracePhase
@@ -3191,6 +3191,70 @@ class TestPhase4Connect(unittest.TestCase):
         # Executor darf klassifizieren weder importieren noch aufrufen.
         self.assertNotIn("classify_interaction_result", source)
         self.assertNotIn("from low_complexity import classify", source)
+
+    def test_e2_constitution_blocks_destructive_shell_without_owner(self):
+        from constitution import get_constitution
+
+        blocked = get_constitution().validate_action(
+            "system_command",
+            {
+                "outside_effect": True,
+                "audit_logged": True,
+                "risk": "high",
+                "destructive": True,
+                "owner_approved": False,
+            },
+        )
+        self.assertFalse(blocked["allowed"])
+        self.assertIn("protect_user", blocked["blocked_by"])
+
+    def test_e2_constitution_blocks_package_without_owner(self):
+        from constitution import get_constitution
+
+        blocked = get_constitution().validate_action(
+            "modify_config",
+            {
+                "outside_effect": True,
+                "audit_logged": True,
+                "risk": "high",
+                "owner_approved": False,
+            },
+        )
+        self.assertFalse(blocked["allowed"])
+        self.assertIn("no_silent_privilege_escalation", blocked["blocked_by"])
+
+    def test_e2_computer_use_shell_constitution_gate(self):
+        from computer_use import _constitution_gate_shell
+
+        with patch("computer_use.is_owner_equivalent_mode", return_value=False):
+            with patch("constitution_override.is_owner_equivalent_mode", return_value=False):
+                msg = _constitution_gate_shell("rm -rf /tmp/testdir")
+        self.assertIsNotNone(msg)
+        self.assertIn("Verfassung", msg)
+
+    def test_e2_updater_package_blocked_without_owner(self):
+        from updater import apply_package
+
+        with patch("config.is_owner_equivalent_mode", return_value=False):
+            with patch("constitution_override.is_owner_equivalent_mode", return_value=False):
+                result = apply_package("nonexistent-package.zip")
+        self.assertFalse(result.get("ok"))
+        self.assertIn("Verfassung", result.get("error", ""))
+
+    def test_e2_tool_runtime_blocks_destructive_shell_tool(self):
+        from tool_runtime import constitution_gate_for_tool
+
+        with patch("config.is_owner_equivalent_mode", return_value=False):
+            blocked = constitution_gate_for_tool(
+                {
+                    "kind": "shell",
+                    "name": "isaac.run_shell",
+                    "identifier": "shell-1",
+                },
+                "bitte führe aus: rm -rf /tmp/x",
+            )
+        self.assertIsNotNone(blocked)
+        self.assertFalse(blocked.get("ok", True))
 
 
 if __name__ == '__main__':

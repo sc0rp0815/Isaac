@@ -491,21 +491,40 @@ def constitution_gate_for_tool(
 
     selection = selection or {}
     kind = str(selection.get("kind", "")).lower()
+    name = str(selection.get("name") or selection.get("identifier") or "").lower()
+    mcp_name = str(selection.get("mcp_name", "")).lower()
+    prompt_l = (prompt or "").lower()
+    shell_like = (
+        kind in {"code", "shell"}
+        or "shell" in name
+        or "run_shell" in name
+        or "run_shell" in mcp_name
+        or mcp_name.endswith(".run_shell")
+    )
     metadata: dict = {
         "outside_effect": True,
         "audit_logged": True,
-        "risk": "high" if kind in {"code", "integration"} else "normal",
+        "risk": "high" if kind in {"code", "integration", "shell"} or shell_like else "normal",
     }
-    mcp_name = str(selection.get("mcp_name", "")).lower()
-    prompt_l = (prompt or "").lower()
+    if shell_like:
+        # Destruktive Shell-Muster aus dem Prompt/Tool-Namen erkennen.
+        destructive_tokens = (
+            "rm -rf", "sudo ", "mkfs", "dd if=", "chmod 777", "| bash", "| sh",
+            "curl ", "wget ",
+        )
+        metadata["destructive"] = any(tok in prompt_l for tok in destructive_tokens)
+        try:
+            from config import is_owner_equivalent_mode
+            metadata["owner_approved"] = bool(is_owner_equivalent_mode())
+        except Exception:
+            metadata["owner_approved"] = False
     if "constitution" in mcp_name and any(
         token in prompt_l for token in ("änder", "umschreib", "modify", "rewrite")
     ):
         metadata["self_modify_constitution"] = True
-    if metadata.get("privilege_escalation") and not metadata.get("owner_approved"):
-        metadata["privilege_escalation"] = True
 
-    gate = apply_constitution_gate("tool_invoke", metadata, override_ctx)
+    action = "system_command" if shell_like else "tool_invoke"
+    gate = apply_constitution_gate(action, metadata, override_ctx)
     if gate.get("allowed"):
         return None
 
@@ -518,6 +537,7 @@ def constitution_gate_for_tool(
             "blocked_by": blocked,
             "source": "constitution",
             "override_denied": override,
+            "action": action,
         },
     )
 

@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Optional
 
-from config import BASE_DIR, WORKSPACE, get_config, is_owner_equivalent_mode
+from config import BASE_DIR, WORKSPACE, Level, get_config, is_owner_equivalent_mode
 from audit import AuditLog
 
 log = logging.getLogger("Isaac.ComputerUse")
@@ -136,6 +136,11 @@ def screenshot_dir() -> Path:
     return fallback.parent
 
 
+def _is_destructive_shell(command: str) -> bool:
+    lowered = f" {(command or '').strip().lower()} "
+    return any(fragment in lowered for fragment in BLOCKED_SHELL_FRAGMENTS)
+
+
 def _blocked_shell(command: str) -> Optional[str]:
     lowered = (command or "").strip().lower()
     if not lowered:
@@ -146,6 +151,33 @@ def _blocked_shell(command: str) -> Optional[str]:
         if fragment in lowered:
             return f"Blockiert: unsicherer Shell-Fragment ({fragment.strip()})"
     return None
+
+
+def _constitution_gate_shell(command: str) -> Optional[str]:
+    """Verfassungs-Gate für Shell: destruktive Befehle ohne Owner blockieren."""
+    from constitution_override import apply_constitution_gate, build_override_context
+
+    owner = is_owner_equivalent_mode()
+    gate = apply_constitution_gate(
+        "system_command",
+        {
+            "outside_effect": True,
+            "audit_logged": True,
+            "risk": "high",
+            "destructive": _is_destructive_shell(command),
+            "owner_approved": owner,
+        },
+        build_override_context(
+            source="computer_use.shell",
+            caller_level=Level.STEFFEN if owner else Level.TASK,
+            owner_confirmed=owner,
+            override_reason="owner_equivalent_mode" if owner else "",
+        ),
+    )
+    if gate.get("allowed"):
+        return None
+    blocked = ", ".join(gate.get("blocked_by") or [])
+    return f"Verfassung blockiert Shell: {blocked}"
 
 
 def parse_agent_body(body: str) -> AgentAction:
@@ -484,6 +516,15 @@ class ComputerUseRuntime:
         blocked = _blocked_shell(command)
         if blocked:
             return {"ok": False, "error": blocked}
+        constitution_block = _constitution_gate_shell(command)
+        if constitution_block:
+            AuditLog.action(
+                "ComputerUse",
+                "shell_constitution_block",
+                constitution_block[:160],
+                erfolg=False,
+            )
+            return {"ok": False, "error": constitution_block, "source": "constitution"}
         proc = await asyncio.create_subprocess_shell(
             command,
             stdout=asyncio.subprocess.PIPE,

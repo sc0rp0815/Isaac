@@ -178,9 +178,34 @@ async def _run_checkpoint_replay() -> list[dict]:
     ]
 
 
+def _evaluation_trace_cases() -> list[dict]:
+    """Evolution 2.0: Evaluation-/Learning-Phasen sind serialisierbar und sichtbar."""
+    from decision_trace import DecisionTrace, TracePhase
+
+    trace = DecisionTrace()
+    trace.add(TracePhase.CLASSIFICATION, "classified", {"class": "NORMAL_CHAT"})
+    trace.add(TracePhase.EVALUATION, "quality_scored", {"score_total": 7.5, "acceptable": True})
+    trace.add(TracePhase.LEARNING, "procedure_recorded", {"signature": "abcd1234"})
+    phases = [e["phase"] for e in trace.to_list()]
+    events = [e["event"] for e in trace.to_list()]
+    return [
+        {
+            "name": "decision_trace_has_evaluation_phase",
+            "ok": "evaluation" in phases and "quality_scored" in events,
+            "detail": {"phases": phases, "events": events},
+        },
+        {
+            "name": "decision_trace_has_learning_phase",
+            "ok": "learning" in phases and "procedure_recorded" in events,
+            "detail": {"phases": phases},
+        },
+    ]
+
+
 def run() -> dict:
     cases = [_evaluate_routing_case(case) for case in _routing_expectations()]
     cases.extend(asyncio.run(_run_checkpoint_replay()))
+    cases.extend(_evaluation_trace_cases())
     passed = sum(1 for c in cases if c["ok"])
     return {"suite": "replay", "passed": passed, "total": len(cases), "cases": cases}
 

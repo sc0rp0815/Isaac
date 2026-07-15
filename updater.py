@@ -17,7 +17,7 @@ import tempfile
 import time
 import zipfile
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 from audit import AuditLog
 
@@ -180,7 +180,54 @@ def _make_backup(target_dir: Path) -> Path:
     return backup
 
 
+def _constitution_gate_apply_package(package_name: str) -> Optional[str]:
+    """Paketanwendung ändert Systemcode — Owner-Freigabe bzw. Admin-Mode nötig."""
+    try:
+        from config import Level, is_owner_equivalent_mode
+        from constitution_override import apply_constitution_gate, build_override_context
+    except Exception as exc:
+        log.warning("Constitution-Import für Updater fehlgeschlagen: %s", exc)
+        return None
+
+    owner = is_owner_equivalent_mode()
+    gate = apply_constitution_gate(
+        "modify_config",
+        {
+            "outside_effect": True,
+            "audit_logged": True,
+            "risk": "high",
+            "owner_approved": owner,
+            "package": str(package_name or "")[:120],
+        },
+        build_override_context(
+            source="updater.apply_package",
+            caller_level=Level.STEFFEN if owner else Level.TASK,
+            owner_confirmed=owner,
+            override_reason="owner_equivalent_mode" if owner else "",
+        ),
+    )
+    if gate.get("allowed"):
+        return None
+    blocked = ", ".join(gate.get("blocked_by") or [])
+    return f"Verfassung blockiert Paket-Anwendung: {blocked}"
+
+
 def apply_package(package_name: str, target_dir: Optional[str] = None, create_backup: bool = True) -> dict:
+    constitution_block = _constitution_gate_apply_package(package_name)
+    if constitution_block:
+        AuditLog.action(
+            "Updater",
+            "apply_package_blocked",
+            f"{package_name}: {constitution_block[:120]}",
+            erfolg=False,
+        )
+        return {
+            "ok": False,
+            "error": constitution_block,
+            "package": package_name,
+            "source": "constitution",
+        }
+
     pkg = _resolve_package(package_name)
     target = Path(target_dir).expanduser() if target_dir else DEFAULT_TARGET
     target = target.resolve()
@@ -218,6 +265,20 @@ def apply_package(package_name: str, target_dir: Optional[str] = None, create_ba
 
 
 def rollback_last_backup(target_dir: Optional[str] = None, backup_path: Optional[str] = None) -> dict:
+    constitution_block = _constitution_gate_apply_package("ROLLBACK")
+    if constitution_block:
+        AuditLog.action(
+            "Updater",
+            "rollback_blocked",
+            constitution_block[:120],
+            erfolg=False,
+        )
+        return {
+            "ok": False,
+            "error": constitution_block.replace("Paket-Anwendung", "Rollback"),
+            "source": "constitution",
+        }
+
     state = _load_state()
     backup = Path(backup_path) if backup_path else Path(state.get('last_backup') or '')
     if not backup or not backup.exists():

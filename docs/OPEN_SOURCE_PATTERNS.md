@@ -42,6 +42,14 @@ Ideen als *kleine, lokale Muster* auf bestehende Module abgebildet.
 - **Muster:** Explizite Freigabe vor riskanten Aktionen.
 - **Isaac:** `constitution.validate_action`, `constitution_override`, `privilege`, `sudo_gate`.
 
+### 6. Think/Act Separation an Execution-Grenzen (OpenParallax-vertieft)
+
+- **Muster:** Execution-Pfade dürfen Policy nicht umgehen.
+- **Isaac (E2.0):**
+  - Shell: `computer_use._constitution_gate_shell` + destruktive Marker → `protect_user`
+  - Tools: `tool_runtime.constitution_gate_for_tool` mappt Shell-Tools auf `system_command`
+  - Packages: `updater.apply_package` / `rollback_last_backup` → `modify_config` braucht Owner
+
 ## Auswahlregel für künftige Übernahmen
 
 1. Passt es zur Pipeline `classify → retrieve → strategy → task → execute → evaluate → memory`?

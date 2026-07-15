@@ -184,6 +184,11 @@ class Constitution:
             blocked_by.append("separate_fact_hypothesis_memory_directive")
         if metadata.get("manipulative_bonding"):
             blocked_by.append("relationship_without_manipulation")
+        # Shell/Package: destruktive oder systemverändernde Pfade brauchen Owner-Freigabe.
+        if action == "system_command" and metadata.get("destructive") and not metadata.get("owner_approved"):
+            blocked_by.append("protect_user")
+        if action == "modify_config" and not metadata.get("owner_approved"):
+            blocked_by.append("no_silent_privilege_escalation")
         if action in {"system_command", "execute_code", "file_delete", "modify_config"} and risk != "low":
             warnings.append("high_impact_action")
 

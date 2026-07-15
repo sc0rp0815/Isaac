@@ -121,6 +121,60 @@ def _run_cases() -> list[dict]:
         "ok": not_gated is None and skipped_gate is None,
         "detail": not_gated,
     })
+
+    # Shell/Package Constitution (Evolution 2.0)
+    destructive_shell = c.validate_action(
+        "system_command",
+        {
+            "outside_effect": True,
+            "audit_logged": True,
+            "risk": "high",
+            "destructive": True,
+            "owner_approved": False,
+        },
+    )
+    cases.append({
+        "name": "destructive_shell_blocked_without_owner",
+        "ok": (not destructive_shell.get("allowed")) and "protect_user" in destructive_shell.get("blocked_by", []),
+        "detail": destructive_shell,
+    })
+
+    safe_shell = c.validate_action(
+        "system_command",
+        {
+            "outside_effect": True,
+            "audit_logged": True,
+            "risk": "high",
+            "destructive": False,
+            "owner_approved": False,
+        },
+    )
+    cases.append({
+        "name": "non_destructive_shell_allowed_with_warning",
+        "ok": bool(safe_shell.get("allowed")) and "high_impact_action" in safe_shell.get("warnings", []),
+        "detail": safe_shell,
+    })
+
+    package_block = c.validate_action(
+        "modify_config",
+        {"outside_effect": True, "audit_logged": True, "risk": "high", "owner_approved": False},
+    )
+    cases.append({
+        "name": "package_modify_blocked_without_owner",
+        "ok": (not package_block.get("allowed"))
+        and "no_silent_privilege_escalation" in package_block.get("blocked_by", []),
+        "detail": package_block,
+    })
+
+    package_owner = c.validate_action(
+        "modify_config",
+        {"outside_effect": True, "audit_logged": True, "risk": "high", "owner_approved": True},
+    )
+    cases.append({
+        "name": "package_modify_allowed_with_owner",
+        "ok": bool(package_owner.get("allowed")),
+        "detail": package_owner,
+    })
     return cases
 
 

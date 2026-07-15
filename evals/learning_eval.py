@@ -14,6 +14,60 @@ from memory import get_memory, _conn
 from forgetting_decay import decay_weak_preference_facts
 
 
+def _procedure_degrade_cases() -> list[dict]:
+    """Procedure-Memory: Fehlschläge senken Reliability und degradieren."""
+    from types import SimpleNamespace
+    from procedure_memory import record_task_outcome
+    from tool_runtime import _procedure_hints_for_prompt
+    from memory import get_memory
+
+    mem = get_memory()
+    unique = f"e2proc{id(object())}"
+    tool_name = f"isaac.e2_unique_{unique}"
+    score = SimpleNamespace(total=2.0)
+    task = SimpleNamespace(
+        id=f"task_{unique}",
+        typ=SimpleNamespace(value="search"),
+        prompt=f"Suche {unique} marker",
+        beschreibung=f"Suche {unique} marker",
+        used_tools=[{"name": tool_name}],
+        score=score,
+        status=SimpleNamespace(value="failed"),
+        classification=SimpleNamespace(normalized_text=f"suche {unique}"),
+        decision_trace=None,
+    )
+    first = record_task_outcome(task)
+    degraded = bool((first or {}).get("degraded"))
+    # Explizit degraded Procedure mit einzigartigem Tool — darf nicht boosten
+    sig = f"e2degrade{unique}"[:16]
+    mem.upsert_procedure(
+        signature=sig,
+        task_type="search",
+        intent_hint=f"marker {unique}",
+        keywords=[unique, "marker", "suche"],
+        tools_used=[tool_name],
+        reliability=0.95,
+        success_count=0,
+        failure_count=4,
+        last_status="failed",
+        degraded=True,
+    )
+    hints = _procedure_hints_for_prompt(f"Suche marker {unique}")
+    skipped = tool_name not in hints
+    return [
+        {
+            "name": "procedure_failure_marks_degraded",
+            "ok": bool(first) and degraded,
+            "detail": {"first": first},
+        },
+        {
+            "name": "degraded_procedure_skipped_in_hints",
+            "ok": skipped,
+            "detail": {"tool": tool_name, "hints": hints, "signature": sig},
+        },
+    ]
+
+
 def _regelwerk_memory_cases() -> list[dict]:
     from regelwerk import Frage
     from isaac_core import IsaacKernel
@@ -138,6 +192,7 @@ def run() -> dict:
         {"name": "development_events_archived", "ok": archive_ok, "detail": {"archived": archived_count}},
     ]
     cases.extend(_regelwerk_memory_cases())
+    cases.extend(_procedure_degrade_cases())
     passed = sum(1 for c in cases if c["ok"])
     return {"suite": "learning", "passed": passed, "total": len(cases), "cases": cases}
 

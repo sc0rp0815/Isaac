@@ -23,7 +23,7 @@ Isaac-Umsetzung: nur TracePhase erweitern, kein neues Observability-Produkt.
 [x] 1.1 TracePhase.EVALUATION nach Quality-Score im Executor
 [x] 1.2 TracePhase.LEARNING bei Procedure-Record
 [x] 1.3 FOLLOWUP-Entscheidung im AI-Pfad tracen
-[ ] 1.4 Evaluation-Phasen in evals/replay_eval sichtbar machen (optional)
+[x] 1.4 Evaluation-Phasen in evals/replay_eval sichtbar machen
 
 ──────────────────────────────────────────────────────────────────────────────
 E2.0.2 PROCEDURE → SELECTION (Letta/Mem0-inspiriert, bounded)
@@ -32,7 +32,7 @@ Idee: Memory-Hits boosten Tool-Auswahl; kein Graph-DB, kein Mem0-Dependency.
 
 [x] 2.1 Keyword-Overlap-Boost auf bestehende procedure_hints
 [x] 2.2 Owner-Procedure-Hints unverändert
-[ ] 2.3 Procedure-Degrade-Pfad in mehr Evals absichern
+[x] 2.3 Procedure-Degrade-Pfad in learning_eval abgesichert
 
 ──────────────────────────────────────────────────────────────────────────────
 E2.0.3 SECURITY / OWNER-TOOLS
@@ -46,14 +46,15 @@ E2.0.4 POLICY & CONSTITUTION (Roadmap #1)
 ──────────────────────────────────────────────────────────────────────────────
 [x] 4.1 Constitution-Gates an Tool/Browser/File (Phase 4)
 [x] 4.2 Governance/Regression-Evals hermetisch ohne ADMIN_MODE
-[ ] 4.3 Weitere kritische Pfade inventarisieren (shell, package)
+[x] 4.3 Shell (computer_use + tool_runtime) + Package/Rollback (updater) an Constitution
 
 ──────────────────────────────────────────────────────────────────────────────
 E2.0.5 RELEASE-DISZIPLIN
 ──────────────────────────────────────────────────────────────────────────────
 [x] 5.1 Validierung A–G (replay_eval) grün
-[x] 5.2 unittest (205) + eval_runner (52/52) + sanity_check grün
+[x] 5.2 unittest (210) + eval_runner (60/60) + sanity_check grün
 [x] 5.3 PR gegen main: https://github.com/glinkasteffen075-bit/Isaac/pull/24
+[!] 5.4 GitHub Actions: Account-Billing-Lock (CI Jobs starten nicht) — lokal validiert
 
 ──────────────────────────────────────────────────────────────────────────────
 EXPLIZIT NICHT IN EVOLUTION 2.0 (vorerst)
