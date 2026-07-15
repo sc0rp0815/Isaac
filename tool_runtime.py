@@ -542,12 +542,20 @@ def constitution_gate_for_tool(
     )
 
 
-async def run_selected_tool(selection: dict, prompt: str, override_ctx=None) -> dict:
+async def run_selected_tool(
+    selection: dict,
+    prompt: str,
+    override_ctx=None,
+    *,
+    skip_constitution: bool = False,
+) -> dict:
     if not selection:
         return error_result("Keine Tool-Auswahl", metadata={"source": "selection"})
-    blocked = constitution_gate_for_tool(selection, prompt, override_ctx=override_ctx)
-    if blocked:
-        return blocked
+    # Executor prüft Constitution oft bereits selbst — dann nicht doppelt.
+    if not skip_constitution:
+        blocked = constitution_gate_for_tool(selection, prompt, override_ctx=override_ctx)
+        if blocked:
+            return blocked
     source = selection.get("source")
     if source == "registry":
         return ensure_result_contract(await _run_registry_tool(selection.get("tool"), prompt), source="registry")

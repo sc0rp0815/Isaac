@@ -622,7 +622,10 @@ class Executor:
             else:
                 result = ensure_result_contract(
                     await run_selected_tool(
-                        selection, prompt, override_ctx=override_ctx,
+                        selection,
+                        prompt,
+                        override_ctx=override_ctx,
+                        skip_constitution=True,
                     ),
                     source="executor_boundary",
                 )
