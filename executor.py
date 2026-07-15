@@ -652,15 +652,22 @@ class Executor:
             )
             tool_runs += 1
             if not result.get('ok'):
+                meta = result.get("metadata") if isinstance(result.get("metadata"), dict) else {}
+                constitution_blocked = (
+                    str(meta.get("source") or "") == "constitution"
+                    or "Verfassung" in str(result.get("error") or "")
+                )
                 task.decision_trace.add(
                     TracePhase.EXECUTION,
-                    "execution_failed",
+                    "constitution_blocked" if constitution_blocked else "execution_failed",
                     {
                         "identifier": identifier,
                         "name": name,
                         "via": via,
                         "status_code": result.get("status_code"),
                         "error": result.get("error", ""),
+                        "blocked_by": list(meta.get("blocked_by") or []),
+                        "source": meta.get("source") or via,
                     },
                 )
                 task.decision_trace.add(
@@ -669,7 +676,7 @@ class Executor:
                     {
                         "identifier": identifier,
                         "name": name,
-                        "reason": "tool_execution_failed",
+                        "reason": "constitution_blocked" if constitution_blocked else "tool_execution_failed",
                     },
                 )
                 task.log(f"Tool fehlgeschlagen: {name} – {result.get('error', 'unbekannt')}")
