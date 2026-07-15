@@ -2,6 +2,13 @@
 
 Führt geplante Owner-Befehle im Background-Loop aus (z. B. nächtliches Cleanup),
 wenn Zeitfenster, Akku und Intervall es erlauben.
+
+Grenzen (E2.0+):
+  - nur Admin/Owner-Modus
+  - Constitution-Gate vor Ausführung
+  - max. Tasks pro Zyklus
+  - Failure-Backoff bei wiederholten Fehlern
+  - inspectable Status (kein freies „wollen“, nur geplante Pfade)
 """
 
 from __future__ import annotations
@@ -11,17 +18,24 @@ import logging
 import os
 from dataclasses import dataclass, field, replace
 from datetime import datetime
+from pathlib import Path
 from typing import Any, Callable, Optional
 
 from audit import AuditLog
-from config import RUNTIME_SETTINGS_PATH, is_owner_equivalent_mode
+from config import DATA_DIR, RUNTIME_SETTINGS_PATH, is_owner_equivalent_mode
 
 log = logging.getLogger("Isaac.OwnerAutonomy")
+
+AUTONOMY_STATE_PATH = DATA_DIR / "owner_autonomy_state.json"
+DEFAULT_MAX_TASKS_PER_CYCLE = 2
+FAILURE_BACKOFF_MULTIPLIER = 2.0
+FAILURE_BACKOFF_THRESHOLD = 2
 
 _TASK_ENV_ALIASES: dict[str, str] = {
     "nightly_downloads_cleanup": "NIGHTLY",
     "weekly_deep_cleanup": "WEEKLY",
     "daily_isaac_health": "HEALTH",
+    "weekly_toolkit_sync": "TOOLKIT",
 }
 
 _WEEKDAY_ALIASES: dict[str, int] = {
@@ -61,6 +75,114 @@ def owner_autonomy_enabled() -> bool:
         return False
     raw = str(os.getenv("ISAAC_OWNER_AUTONOMY", "1") or "1").strip().lower()
     return raw in {"1", "true", "yes", "on"}
+
+
+def max_tasks_per_cycle() -> int:
+    raw = os.getenv("ISAAC_OWNER_AUTONOMY_MAX_PER_CYCLE")
+    if raw is None or str(raw).strip() == "":
+        return DEFAULT_MAX_TASKS_PER_CYCLE
+    try:
+        return max(1, min(10, int(raw)))
+    except (TypeError, ValueError):
+        return DEFAULT_MAX_TASKS_PER_CYCLE
+
+
+def load_autonomy_state(path: Path | None = None) -> dict[str, Any]:
+    target = path or AUTONOMY_STATE_PATH
+    if not target.exists():
+        return {"tasks": {}}
+    try:
+        data = json.loads(target.read_text(encoding="utf-8"))
+    except Exception as exc:
+        log.debug("Owner-Autonomie-State unlesbar: %s", exc)
+        return {"tasks": {}}
+    if not isinstance(data, dict):
+        return {"tasks": {}}
+    tasks = data.get("tasks")
+    if not isinstance(tasks, dict):
+        data["tasks"] = {}
+    return data
+
+
+def save_autonomy_state(state: dict[str, Any], path: Path | None = None) -> None:
+    target = path or AUTONOMY_STATE_PATH
+    payload = dict(state or {})
+    if "tasks" not in payload or not isinstance(payload.get("tasks"), dict):
+        payload["tasks"] = {}
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+    try:
+        target.chmod(0o600)
+    except OSError:
+        pass
+
+
+def _task_failure_count(state: dict[str, Any], task_id: str) -> int:
+    row = (state.get("tasks") or {}).get(task_id) or {}
+    try:
+        return max(0, int(row.get("consecutive_failures") or 0))
+    except (TypeError, ValueError):
+        return 0
+
+
+def _record_task_outcome(state: dict[str, Any], task_id: str, *, ok: bool, ts: str) -> dict[str, Any]:
+    tasks = dict(state.get("tasks") or {})
+    prev = dict(tasks.get(task_id) or {})
+    fails = int(prev.get("consecutive_failures") or 0)
+    if ok:
+        fails = 0
+    else:
+        fails += 1
+    tasks[task_id] = {
+        "last_run": ts,
+        "last_ok": bool(ok),
+        "consecutive_failures": fails,
+        "total_ok": int(prev.get("total_ok") or 0) + (1 if ok else 0),
+        "total_fail": int(prev.get("total_fail") or 0) + (0 if ok else 1),
+    }
+    state = dict(state)
+    state["tasks"] = tasks
+    state["updated"] = ts
+    return state
+
+
+def _effective_interval_hours(task: ScheduledOwnerTask, state: dict[str, Any]) -> float:
+    base = float(task.min_interval_hours)
+    fails = _task_failure_count(state, task.task_id)
+    if fails >= FAILURE_BACKOFF_THRESHOLD:
+        return base * FAILURE_BACKOFF_MULTIPLIER
+    return base
+
+
+def _constitution_gate_autonomy_task(task: ScheduledOwnerTask) -> Optional[str]:
+    """Verfassungs-Gate vor proaktiver Ausführung (Audit + Owner-Bound)."""
+    from constitution_override import critical_action_gate
+
+    kind = (task.action_kind or "").strip().lower()
+    dry_run = bool((task.params or {}).get("dry_run"))
+    if kind in {"filesystem_cleanup", "security_toolkit", "shell"}:
+        action = "system_command"
+        destructive = kind == "security_toolkit" or (kind == "filesystem_cleanup" and not dry_run)
+    elif kind in {"file_write", "file_delete"}:
+        action = "file_delete" if kind == "file_delete" else "system_command"
+        destructive = True
+    else:
+        # status/ops: leichte high-impact-Warnung, kein destruktiver Block
+        action = "tool_invoke"
+        destructive = False
+
+    return critical_action_gate(
+        action,
+        source=f"owner_autonomy.{task.task_id}",
+        owner_approved=is_owner_equivalent_mode(),
+        destructive=destructive,
+        risk="high",
+        extra_metadata={
+            "autonomy_task": task.task_id,
+            "action_kind": kind,
+            "raw_phrase": (task.raw_phrase or "")[:80],
+        },
+    )
 
 
 @dataclass(frozen=True)
@@ -267,6 +389,8 @@ def due_owner_tasks(
     last_runs: dict[str, str],
     akku: dict[str, Any],
     now: Optional[datetime] = None,
+    autonomy_state: Optional[dict[str, Any]] = None,
+    limit: Optional[int] = None,
 ) -> list[ScheduledOwnerTask]:
     """Gibt fällige, aber noch nicht ausgeführte Owner-Tasks zurück."""
     if not owner_autonomy_enabled():
@@ -277,6 +401,7 @@ def due_owner_tasks(
     weekday = current.weekday()
     plugged = bool(akku.get("plugged", True))
     battery = int(akku.get("prozent", 100) or 100)
+    state = autonomy_state if autonomy_state is not None else load_autonomy_state()
 
     due: list[ScheduledOwnerTask] = []
     for task in get_scheduled_owner_tasks():
@@ -288,10 +413,66 @@ def due_owner_tasks(
             continue
         if not _in_hour_window(hour, task.window_start_hour, task.window_end_hour):
             continue
-        if _hours_since(task.task_id, last_runs) < task.min_interval_hours:
+        needed = _effective_interval_hours(task, state)
+        if _hours_since(task.task_id, last_runs) < needed:
             continue
         due.append(task)
+
+    # limit=None → Zyklus-Cap; limit<0 → uncapped; limit>=0 → hartes Maximum
+    if limit is None:
+        cap = max_tasks_per_cycle()
+    else:
+        cap = int(limit)
+    if cap >= 0 and len(due) > cap:
+        return due[:cap]
     return due
+
+
+def autonomy_status(
+    *,
+    last_runs: Optional[dict[str, str]] = None,
+    akku: Optional[dict[str, Any]] = None,
+    now: Optional[datetime] = None,
+) -> dict[str, Any]:
+    """Inspectable Status der Owner-Autonomie (für Dashboard/Status-Befehle)."""
+    current = now or datetime.now()
+    battery = akku if isinstance(akku, dict) else {"plugged": True, "prozent": 100}
+    runs = dict(last_runs or {})
+    state = load_autonomy_state()
+    scheduled = get_scheduled_owner_tasks()
+    due_uncapped = due_owner_tasks(
+        last_runs=runs,
+        akku=battery,
+        now=current,
+        autonomy_state=state,
+        limit=-1,
+    )
+    due_capped = due_uncapped[: max_tasks_per_cycle()]
+    return {
+        "enabled": owner_autonomy_enabled(),
+        "admin_mode": is_owner_equivalent_mode(),
+        "max_per_cycle": max_tasks_per_cycle(),
+        "now": current.isoformat(timespec="seconds"),
+        "scheduled_count": len(scheduled),
+        "scheduled": [
+            {
+                "task_id": t.task_id,
+                "action_kind": t.action_kind,
+                "window": f"{t.window_start_hour:02d}-{t.window_end_hour:02d}",
+                "min_interval_hours": t.min_interval_hours,
+                "effective_interval_hours": _effective_interval_hours(t, state),
+                "requires_plugged": t.requires_plugged,
+                "min_battery_percent": t.min_battery_percent,
+                "weekday": t.weekday,
+                "last_run": runs.get(t.task_id, ""),
+                "consecutive_failures": _task_failure_count(state, t.task_id),
+            }
+            for t in scheduled
+        ],
+        "due_task_ids": [t.task_id for t in due_capped],
+        "due_uncapped_count": len(due_uncapped),
+        "state_path": str(AUTONOMY_STATE_PATH),
+    }
 
 
 async def run_due_owner_autonomy_tasks(
@@ -310,8 +491,35 @@ async def run_due_owner_autonomy_tasks(
 
     updated = dict(last_runs or {})
     current = now or datetime.now()
+    ts = current.isoformat(timespec="seconds")
+    state = load_autonomy_state()
+    executed = 0
 
-    for task in due_owner_tasks(last_runs=updated, akku=akku, now=current):
+    for task in due_owner_tasks(
+        last_runs=updated,
+        akku=akku,
+        now=current,
+        autonomy_state=state,
+        limit=max_tasks_per_cycle(),
+    ):
+        gate_block = _constitution_gate_autonomy_task(task)
+        if gate_block:
+            note = f"[Owner-Autonomie] {task.task_id}: BLOCK — {gate_block}"
+            if on_note:
+                on_note(note)
+            AuditLog.action(
+                "OwnerAutonomy",
+                task.task_id,
+                f"blocked constitution kind={task.action_kind}",
+                erfolg=False,
+            )
+            state = _record_task_outcome(state, task.task_id, ok=False, ts=ts)
+            # Block zählt als Versuch mit Backoff, aber last_runs nur bei echten Runs?
+            # Bounded: Block speichern, Intervall greifen lassen
+            updated[task.task_id] = ts
+            executed += 1
+            continue
+
         action = OwnerAction(task.action_kind, dict(task.params), raw=task.raw_phrase)
         try:
             if task.action_kind == "security_toolkit":
@@ -329,7 +537,28 @@ async def run_due_owner_autonomy_tasks(
         except Exception as exc:
             log.debug("Owner procedure capture skipped: %s", exc)
 
-        updated[task.task_id] = current.isoformat(timespec="seconds")
+        try:
+            from memory import get_memory
+
+            get_memory().log_development_event(
+                event_type="owner_autonomy_run",
+                target_kind="autonomy_task",
+                target_key=task.task_id,
+                reason=f"{'ok' if ok else 'fail'}: {(result or '')[:120]}",
+                confidence_before=0.0,
+                confidence_after=1.0 if ok else 0.2,
+                requires_review=not ok,
+                metadata={
+                    "action_kind": task.action_kind,
+                    "ok": ok,
+                    "raw_phrase": task.raw_phrase[:80],
+                },
+            )
+        except Exception as exc:
+            log.debug("Owner-Autonomie development-log: %s", exc)
+
+        updated[task.task_id] = ts
+        state = _record_task_outcome(state, task.task_id, ok=ok, ts=ts)
         summary = (result or "").replace("\n", " ")[:160]
         note = f"[Owner-Autonomie] {task.task_id}: {'OK' if ok else 'FAIL'} — {summary}"
         if on_note:
@@ -338,7 +567,15 @@ async def run_due_owner_autonomy_tasks(
             "OwnerAutonomy",
             task.task_id,
             f"ok={ok} kind={task.action_kind} phrase={task.raw_phrase[:80]}",
+            erfolg=bool(ok),
         )
         log.info("Owner-Autonomie ausgeführt: %s ok=%s", task.task_id, ok)
+        executed += 1
+
+    if executed:
+        try:
+            save_autonomy_state(state)
+        except Exception as exc:
+            log.debug("Owner-Autonomie-State speichern: %s", exc)
 
     return updated

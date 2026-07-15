@@ -63,6 +63,15 @@ E2.0.5 RELEASE-DISZIPLIN
 [x] 5.6 E2.0 Constitution-Pfad lokal RELEASE-READY (Merge nach Billing/CI oder explizitem Owner-OK)
 
 ──────────────────────────────────────────────────────────────────────────────
+E2.0.6 BOUNDED OWNER-AUTONOMY (nach Main-Merge)
+──────────────────────────────────────────────────────────────────────────────
+[x] 6.1 Constitution-Gate vor Autonomie-Ausführung
+[x] 6.2 max_tasks_per_cycle (Default 2)
+[x] 6.3 Failure-Backoff (2× Intervall nach ≥2 Fails)
+[x] 6.4 autonomy_status() + Status in isaac_ops
+[x] 6.5 Tests + Docs OWNER_COMMANDS
+
+──────────────────────────────────────────────────────────────────────────────
 EXPLIZIT NICHT IN EVOLUTION 2.0 (vorerst)
 ──────────────────────────────────────────────────────────────────────────────
 Human Layer, Personality, Trust-Modeling, Dashboard-Redesign,

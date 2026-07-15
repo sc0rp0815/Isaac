@@ -2196,6 +2196,18 @@ async def _isaac_ops(action: OwnerAction) -> tuple[str, bool]:
         f"Computer-Use: {get_config().computer_use_enabled}",
         f"Browser: {get_config().browser_automation}",
     ]
+    try:
+        from owner_autonomy import autonomy_status
+
+        auto = autonomy_status()
+        lines.append(
+            f"Owner-Autonomie: {'an' if auto.get('enabled') else 'aus'} "
+            f"(max/Zyklus={auto.get('max_per_cycle')}, "
+            f"geplant={auto.get('scheduled_count')}, "
+            f"fällig={','.join(auto.get('due_task_ids') or []) or '-'})"
+        )
+    except Exception:
+        pass
     return "\n".join(lines), True
 
 

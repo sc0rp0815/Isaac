@@ -26,6 +26,19 @@ Im Isaac-Chat (Dashboard oder CLI) einfach sprechen — z. B. `Isaac, zeige wl
 
 **Nicht als Befehl:** Erklär-Chat (`erkläre mir das Wetter als Motiv in Literatur`) → normaler Chat-Pfad.
 
+### Owner-Autonomie (Background, bounded)
+
+Proaktive geplante Tasks nur im Admin-Modus (`owner_autonomy.py`):
+
+| Env | Wirkung |
+|-----|---------|
+| `ISAAC_OWNER_AUTONOMY=0` | aus |
+| `ISAAC_OWNER_AUTONOMY_MAX_PER_CYCLE=2` | max. Tasks pro Background-Zyklus (Default 2) |
+| `ISAAC_OWNER_AUTONOMY_HEALTH_START/END` | Zeitfenster Health-Task |
+| `ISAAC_OWNER_AUTONOMY_NIGHTLY_*` | nächtliches Downloads-Cleanup |
+
+Grenzen: Constitution-Gate vor Ausführung, Failure-Backoff, inspectable Status in `isaac status`.
+
 ---
 
 ## Kommunikation

@@ -2966,22 +2966,31 @@ class TestPhase4Connect(unittest.TestCase):
 
     def test_run_due_owner_autonomy_tasks_executes_and_records(self):
         from datetime import datetime
+        import tempfile
         from owner_autonomy import run_due_owner_autonomy_tasks
 
         notes: list[str] = []
 
         async def _run():
-            with patch("owner_autonomy.owner_autonomy_enabled", return_value=True):
-                with patch(
-                    "owner_action.execute_owner_action",
-                    return_value=("[Owner] OK", True),
-                ):
-                    return await run_due_owner_autonomy_tasks(
-                        last_runs={},
-                        akku={"plugged": True, "prozent": 90},
-                        on_note=notes.append,
-                        now=datetime(2026, 7, 12, 10, 0, 0),
-                    )
+            with tempfile.TemporaryDirectory() as tmp:
+                state_path = Path(tmp) / "owner_autonomy_state.json"
+                with patch("owner_autonomy.owner_autonomy_enabled", return_value=True):
+                    with patch("owner_autonomy.is_owner_equivalent_mode", return_value=True):
+                        with patch("owner_autonomy.AUTONOMY_STATE_PATH", state_path):
+                            with patch(
+                                "owner_autonomy._constitution_gate_autonomy_task",
+                                return_value=None,
+                            ):
+                                with patch(
+                                    "owner_action.execute_owner_action",
+                                    return_value=("[Owner] OK", True),
+                                ):
+                                    return await run_due_owner_autonomy_tasks(
+                                        last_runs={},
+                                        akku={"plugged": True, "prozent": 90},
+                                        on_note=notes.append,
+                                        now=datetime(2026, 7, 12, 10, 0, 0),
+                                    )
 
         updated = asyncio.run(_run())
         self.assertIn("daily_isaac_health", updated)
@@ -3131,6 +3140,86 @@ class TestPhase4Connect(unittest.TestCase):
         nightly = tasks["nightly_downloads_cleanup"]
         self.assertEqual(nightly.window_start_hour, 1)
         self.assertEqual(nightly.window_end_hour, 4)
+
+    def test_owner_autonomy_max_per_cycle_caps_due_list(self):
+        from datetime import datetime
+        from owner_autonomy import due_owner_tasks
+
+        with patch("owner_autonomy.owner_autonomy_enabled", return_value=True):
+            with patch("owner_autonomy.max_tasks_per_cycle", return_value=1):
+                due = due_owner_tasks(
+                    last_runs={},
+                    akku={"plugged": True, "prozent": 90},
+                    now=datetime(2026, 7, 12, 10, 0, 0),
+                    limit=None,
+                )
+        self.assertLessEqual(len(due), 1)
+
+    def test_owner_autonomy_failure_backoff_doubles_interval(self):
+        from owner_autonomy import (
+            ScheduledOwnerTask,
+            _effective_interval_hours,
+            _record_task_outcome,
+        )
+
+        task = ScheduledOwnerTask(
+            task_id="daily_isaac_health",
+            action_kind="isaac_ops",
+            min_interval_hours=12.0,
+        )
+        state = {"tasks": {}}
+        state = _record_task_outcome(state, "daily_isaac_health", ok=False, ts="t1")
+        state = _record_task_outcome(state, "daily_isaac_health", ok=False, ts="t2")
+        self.assertEqual(_effective_interval_hours(task, state), 24.0)
+
+    def test_owner_autonomy_constitution_blocks_execution(self):
+        from datetime import datetime
+        import tempfile
+        from owner_autonomy import run_due_owner_autonomy_tasks
+
+        notes: list[str] = []
+
+        async def _run():
+            with tempfile.TemporaryDirectory() as tmp:
+                state_path = Path(tmp) / "owner_autonomy_state.json"
+                with patch("owner_autonomy.owner_autonomy_enabled", return_value=True):
+                    with patch("owner_autonomy.is_owner_equivalent_mode", return_value=True):
+                        with patch("owner_autonomy.AUTONOMY_STATE_PATH", state_path):
+                            with patch(
+                                "owner_autonomy._constitution_gate_autonomy_task",
+                                return_value="Verfassung blockiert system_command: protect_user",
+                            ):
+                                with patch(
+                                    "owner_action.execute_owner_action",
+                                ) as exe:
+                                    updated = await run_due_owner_autonomy_tasks(
+                                        last_runs={},
+                                        akku={"plugged": True, "prozent": 90},
+                                        on_note=notes.append,
+                                        now=datetime(2026, 7, 12, 10, 0, 0),
+                                    )
+                                    exe.assert_not_called()
+                                    return updated
+
+        updated = asyncio.run(_run())
+        self.assertIn("daily_isaac_health", updated)
+        self.assertTrue(any("BLOCK" in n for n in notes))
+
+    def test_owner_autonomy_status_is_inspectable(self):
+        from datetime import datetime
+        from owner_autonomy import autonomy_status
+
+        with patch("owner_autonomy.owner_autonomy_enabled", return_value=True):
+            with patch("owner_autonomy.is_owner_equivalent_mode", return_value=True):
+                status = autonomy_status(
+                    last_runs={},
+                    akku={"plugged": True, "prozent": 90},
+                    now=datetime(2026, 7, 12, 10, 0, 0),
+                )
+        self.assertTrue(status["enabled"])
+        self.assertIn("scheduled", status)
+        self.assertIn("due_task_ids", status)
+        self.assertGreaterEqual(status["scheduled_count"], 1)
 
     def test_e2_trace_phases_include_evaluation_and_learning(self):
         """Evolution 2.0: DecisionTrace deckt Evaluation und Learning ab."""
