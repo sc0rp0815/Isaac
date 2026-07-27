@@ -138,13 +138,19 @@ chrome secrets dump
 |--------|--------|
 | `chrome tabs` | offene Tab-URLs |
 | `chrome secrets` | Cookies-Katalog + Autofill + Karten + Accounts + PWM-Status |
-| `chrome cookies` | nur Cookie-Hosts/Namen (Werte: v10-encrypted) |
+| `chrome cookies` | nur Cookie-Hosts/Namen (DB: v10-encrypted) |
 | `chrome autofill` | Formular-Historie (Klartext wo verfügbar) |
 | `chrome passwords` | Status Google Password Manager (lokal meist nur Hashes) |
+| `chrome decrypt` | **Klartext** Cookies/Tokens aus Chrome-Prozessspeicher (live) |
+| `chrome decrypt mask` | wie oben, Werte maskiert |
+| `chrome decrypt für SID` | nur Name-Filter |
 
-**Grenzen (ehrlich):** Cookie-*Werte* und Login-Passwörter sind auf modernem Chrome Android
-über Keystore/Cloud geschützt — Katalog, Autofill, maskierte Karten und Accounts sind lesbar.
-`chrome secrets dump` speichert Roh-DBs unter `data/chrome_secrets_dump/` (Owner only).
+**Decrypt-Pfad:** Keine kryptografische OSCrypt-Knackung der Cookie-DB. Stattdessen
+Memory-Scan des laufenden Chrome-Prozesses (`/proc/PID/mem`) — Werte, die Chrome
+bereits entschlüsselt im RAM hält (Sessions, SID/HSID, OAuth-Tokens, …).  
+Voraussetzung: Chrome läuft; Magisk-Root; Termux-Brücke.  
+Export: `data/chrome_secrets_dump/live_sessions.json`  
+Audit loggt nur Metadaten (Anzahl/PID), keine Klartext-Secrets.
 
 ### Alle Android-Apps steuern
 

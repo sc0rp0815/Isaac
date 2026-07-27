@@ -1167,9 +1167,33 @@ def _detect_app_launch(raw: str, normalized: str) -> Optional[OwnerAction]:
         "chrome passwords",
         "chrome passwörter",
         "chrome passwoerter",
+        "chrome decrypt",
+        "chrome live",
+        "decrypt chrome",
+        "entschlüssele cookies",
+        "entschluessle cookies",
     } or normalized.startswith("chrome secrets") or normalized.startswith(
         "chrome cookies"
-    ) or normalized.startswith("chrome autofill"):
+    ) or normalized.startswith("chrome autofill") or normalized.startswith(
+        "chrome decrypt"
+    ) or normalized.startswith("chrome live"):
+        # live memory decrypt path
+        if any(
+            x in normalized
+            for x in ("decrypt", "live", "entschlüssel", "entschluessel", "klartext")
+        ):
+            name_filter = ""
+            m_nf = re.search(r"(?:name|filter|für|fuer|von)\s+([\w.\-]+)", normalized)
+            if m_nf:
+                name_filter = m_nf.group(1)
+            return OwnerAction(
+                "chrome_decrypt",
+                {
+                    "reveal": "mask" not in normalized and "redact" not in normalized,
+                    "name_filter": name_filter,
+                },
+                raw=raw,
+            )
         section = "all"
         if "cookie" in normalized:
             section = "cookies"
@@ -1357,6 +1381,7 @@ async def execute_owner_action(action: OwnerAction) -> tuple[str, bool]:
         "chrome_tabs": _chrome_tabs,
         "chrome_tab_open": _chrome_tab_open,
         "chrome_secrets": _chrome_secrets,
+        "chrome_decrypt": _chrome_decrypt,
         "apps_list": _apps_list,
         "app_stop": _app_stop,
         "android_activity": _android_activity,
@@ -2619,6 +2644,22 @@ async def _chrome_secrets(action: OwnerAction) -> tuple[str, bool]:
         return format_secrets_report(result, section=section), bool(result.get("ok"))
     except Exception as exc:
         return f"[Chrome Secrets] Fehler: {exc}", False
+
+
+async def _chrome_decrypt(action: OwnerAction) -> tuple[str, bool]:
+    """Live memory extract of plaintext cookie/token values (owner)."""
+    reveal = bool(action.params.get("reveal", True))
+    name_filter = str(action.params.get("name_filter") or "").strip()
+    try:
+        from chrome_secrets import format_live_decrypt_report, live_decrypt_sessions
+
+        result = await live_decrypt_sessions(
+            reveal=reveal,
+            name_filter=name_filter,
+        )
+        return format_live_decrypt_report(result, reveal=reveal), bool(result.get("ok"))
+    except Exception as exc:
+        return f"[Chrome Decrypt] Fehler: {exc}", False
 
 
 async def _apps_list(action: OwnerAction) -> tuple[str, bool]:

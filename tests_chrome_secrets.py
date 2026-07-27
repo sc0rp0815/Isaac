@@ -98,6 +98,39 @@ class TestChromeSecretsDetect(unittest.TestCase):
         self.assertEqual(a4.kind, "android_input")
         a5 = detect_owner_action("öffne app de.number26.android")
         self.assertEqual(a5.kind, "app_open")
+        a6 = detect_owner_action("chrome decrypt")
+        self.assertEqual(a6.kind, "chrome_decrypt")
+        self.assertTrue(a6.params.get("reveal"))
+        a7 = detect_owner_action("chrome decrypt mask")
+        self.assertEqual(a7.kind, "chrome_decrypt")
+        self.assertFalse(a7.params.get("reveal"))
+
+
+class TestLiveDecryptHelpers(unittest.TestCase):
+    def test_guess_host_and_mask(self):
+        from chrome_secrets import _guess_host_for_name, _mask_value, format_live_decrypt_report
+
+        self.assertEqual(_guess_host_for_name("SID"), ".google.com")
+        self.assertEqual(_guess_host_for_name("access_token"), "(oauth-token)")
+        self.assertIn("…", _mask_value("abcdefghijklmnop", reveal=False))
+        text = format_live_decrypt_report(
+            {
+                "ok": True,
+                "items": [
+                    {
+                        "host": ".google.com",
+                        "name": "SID",
+                        "value": "secretvalue123",
+                        "value_len": 14,
+                        "reveal": True,
+                    }
+                ],
+                "meta": {"pid": 1, "regions": 2, "method": "process_memory"},
+                "note": "test",
+            },
+            reveal=True,
+        )
+        self.assertIn("SID=secretvalue123", text)
 
 
 class TestAndroidAppsSearch(unittest.TestCase):

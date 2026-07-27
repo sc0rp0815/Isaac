@@ -357,12 +357,276 @@ async def password_manager_status() -> dict[str, Any]:
     return info
 
 
+# Live-decrypt cache (plaintext values — never written to audit detail)
+_LIVE_CACHE: dict[str, Any] = {"at": 0.0, "items": []}
+
+_GOOGLE_COOKIE_NAMES = {
+    "SID",
+    "HSID",
+    "SSID",
+    "APISID",
+    "SAPISID",
+    "NID",
+    "SIDCC",
+    "OSID",
+    "__Secure-1PSID",
+    "__Secure-3PSID",
+    "__Secure-1PSIDTS",
+    "__Secure-3PSIDTS",
+    "__Secure-1PSIDCC",
+    "__Secure-3PSIDCC",
+    "__Secure-OSID",
+    "__Secure-BUCKET",
+}
+
+
+def _guess_host_for_name(name: str) -> str:
+    n = name or ""
+    if n in _GOOGLE_COOKIE_NAMES or (n.startswith("__Secure-") and "PSID" in n):
+        return ".google.com"
+    if n in {"c_user", "xs", "datr", "sb", "fr"}:
+        return ".facebook.com"
+    if n in {"auth_token", "ct0", "twid", "kdt"}:
+        return ".x.com"
+    if n in {"li_at"}:
+        return ".linkedin.com"
+    if "next-auth" in n.lower():
+        return "(next-auth)"
+    if n.lower() in {"sessionid", "session", "connect.sid", "user_session"}:
+        return "(session)"
+    if n.lower() in {"access_token", "refresh_token", "id_token", "Bearer", "token", "jwt"}:
+        return "(oauth-token)"
+    if n.lower() in {"password", "passwd"}:
+        return "(password-field)"
+    return "(unknown)"
+
+
+def _mask_value(value: str, *, reveal: bool) -> str:
+    if reveal:
+        return value
+    if len(value) <= 8:
+        return "****"
+    return f"{value[:4]}…{value[-4:]} ({len(value)}c)"
+
+
+async def _ensure_memscan_on_device() -> str:
+    """Copy memscan script to /sdcard and return device path."""
+    src = Path(__file__).resolve().parent / "scripts" / "android_chrome_memscan.py"
+    dest = "/sdcard/Download/isaac_chrome_memscan.py"
+    if not src.exists():
+        return ""
+    try:
+        Path("/sdcard/Download").mkdir(parents=True, exist_ok=True)
+        Path(dest).write_bytes(src.read_bytes())
+    except OSError:
+        b64 = base64.b64encode(src.read_bytes()).decode()
+        # small script only
+        await _root_sh(
+            f"echo {b64} | base64 -d > {dest} 2>/dev/null; chmod 644 {dest}",
+            timeout=30.0,
+        )
+    return dest
+
+
+async def live_decrypt_sessions(
+    *,
+    reveal: bool = True,
+    limit: int = 80,
+    name_filter: str = "",
+) -> dict[str, Any]:
+    """Extract plaintext cookie/token values from live Chrome process memory.
+
+    Bypasses OSCrypt by reading values already decrypted in Chrome's address
+    space. Requires Magisk root + Chrome running.
+    """
+    blocked = _owner_ok()
+    if blocked:
+        return {"ok": False, "error": blocked, "items": []}
+
+    from termux_bridge import bridge_available
+
+    if not bridge_available():
+        return {"ok": False, "error": "Termux-Brücke nicht verfügbar", "items": []}
+
+    script = await _ensure_memscan_on_device()
+    if not script:
+        return {"ok": False, "error": "memscan script fehlt", "items": []}
+
+    pid_probe = await _root_sh("pidof com.android.chrome 2>/dev/null", timeout=15.0)
+    if not (pid_probe.get("stdout") or "").strip():
+        await _root_sh(
+            "am start -n com.android.chrome/com.google.android.apps.chrome.Main "
+            ">/dev/null 2>&1; sleep 2; pidof com.android.chrome",
+            timeout=20.0,
+        )
+
+    cmd = (
+        "export PATH=/data/data/com.termux/files/usr/bin:/system/bin:$PATH; "
+        f"python3 {script} 2>/dev/null"
+    )
+    r = await _root_sh(cmd, timeout=120.0)
+    out = r.get("stdout") or ""
+    if "FOUND=" not in out and "PID=" not in out:
+        return {
+            "ok": False,
+            "error": (r.get("error") or out or "memscan fehlgeschlagen")[:300],
+            "items": [],
+        }
+
+    meta: dict[str, Any] = {"method": "process_memory", "pid": None, "regions": 0}
+    items: list[dict[str, Any]] = []
+    nf = (name_filter or "").lower().strip()
+
+    for line in out.splitlines():
+        if line.startswith("PID="):
+            try:
+                meta["pid"] = int(line.split("=", 1)[1])
+            except ValueError:
+                pass
+            continue
+        if line.startswith("SCANNED_REGIONS="):
+            try:
+                meta["regions"] = int(line.split("=", 1)[1])
+            except ValueError:
+                pass
+            continue
+        if line.startswith("FOUND=") or line.startswith("MAPS="):
+            continue
+        if "|" not in line:
+            continue
+        parts = line.split("|", 2)
+        if len(parts) < 3:
+            continue
+        source, name, value = parts[0], parts[1], parts[2]
+        if nf and nf not in name.lower() and nf not in value.lower():
+            continue
+        # drop Set-Cookie attribute noise
+        if name.lower() in {
+            "expires",
+            "domain",
+            "path",
+            "max-age",
+            "samesite",
+            "secure",
+            "httponly",
+            "ma",
+            "priority",
+        }:
+            continue
+        if value.lower() in {"function", "true", "false", "none", "null", "undefined"}:
+            continue
+        if value.startswith("function"):
+            continue
+        host = _guess_host_for_name(name)
+        items.append(
+            {
+                "source": source,
+                "host": host,
+                "name": name,
+                "value": value if reveal else _mask_value(value, reveal=False),
+                "value_len": len(value),
+                "reveal": reveal,
+            }
+        )
+
+    best: dict[str, dict[str, Any]] = {}
+    for it in items:
+        k = f"{it['name']}|{it['host']}|{it['value'][:24]}"
+        prev = best.get(k)
+        if not prev or it["value_len"] > prev["value_len"]:
+            best[k] = it
+    # collapse further by name+host keep longest
+    by_nh: dict[str, dict[str, Any]] = {}
+    for it in best.values():
+        k = f"{it['name']}|{it['host']}"
+        prev = by_nh.get(k)
+        if not prev or it["value_len"] > prev["value_len"]:
+            by_nh[k] = it
+    items = sorted(by_nh.values(), key=lambda x: (-x["value_len"], x["name"]))[:limit]
+
+    _LIVE_CACHE["at"] = time.time()
+    if reveal:
+        _LIVE_CACHE["items"] = items
+
+    try:
+        import json
+
+        _DUMP_DIR.mkdir(parents=True, exist_ok=True)
+        export = {
+            "at": _LIVE_CACHE["at"],
+            "method": "process_memory",
+            "count": len(items),
+            "items": [
+                {
+                    "host": i["host"],
+                    "name": i["name"],
+                    "value": i["value"],
+                    "value_len": i["value_len"],
+                }
+                for i in items
+            ],
+        }
+        (_DUMP_DIR / "live_sessions.json").write_text(
+            json.dumps(export, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+    except Exception as exc:
+        log.debug("live export skip: %s", exc)
+
+    AuditLog.action(
+        "ChromeSecrets",
+        "live_decrypt",
+        f"n={len(items)} pid={meta.get('pid')} regions={meta.get('regions')} reveal={reveal}",
+        erfolg=True,
+    )
+    return {
+        "ok": True,
+        "items": items,
+        "count": len(items),
+        "meta": meta,
+        "note": (
+            "Klartext aus Chrome-Prozessspeicher (OSCrypt umgangen via live memory). "
+            "Chrome muss laufen. Keine kryptografische DB-Entschlüsselung."
+        ),
+    }
+
+
+def format_live_decrypt_report(result: dict[str, Any], *, reveal: bool = True) -> str:
+    if not result.get("ok"):
+        return f"[Chrome Decrypt] {result.get('error', 'Fehler')}"
+    items = result.get("items") or []
+    meta = result.get("meta") or {}
+    lines = [
+        f"[Chrome Decrypt / Live Memory] {len(items)} Werte",
+        f"PID={meta.get('pid')} regions={meta.get('regions')} method={meta.get('method')}",
+        result.get("note") or "",
+        "",
+    ]
+    by_host: dict[str, list] = {}
+    for it in items:
+        by_host.setdefault(it.get("host") or "?", []).append(it)
+    for host, rows in sorted(by_host.items(), key=lambda x: (-len(x[1]), x[0])):
+        lines.append(f"## {host} ({len(rows)})")
+        for it in rows[:40]:
+            val = str(it.get("value") or "")
+            if not reveal:
+                val = _mask_value(val, reveal=False)
+            lines.append(f"  {it.get('name')}={val}")
+        lines.append("")
+    if not items:
+        lines.append("(keine Werte — Chrome öffnen, Seiten laden, dann erneut)")
+    lines.append(f"Export: {_DUMP_DIR / 'live_sessions.json'}")
+    return "\n".join(lines).rstrip()
+
+
 async def collect_secrets(
     *,
     host_filter: str = "",
     cookie_limit: int = 60,
     autofill_limit: int = 50,
     include_dump: bool = False,
+    include_live: bool = False,
+    reveal_live: bool = True,
 ) -> dict[str, Any]:
     blocked = _owner_ok()
     if blocked:
@@ -380,6 +644,7 @@ async def collect_secrets(
         "payments": {},
         "accounts": {},
         "passwords": {},
+        "live": {},
         "limitations": [],
     }
 
@@ -390,7 +655,7 @@ async def collect_secrets(
         )
         if include_dump:
             _DUMP_DIR.mkdir(parents=True, exist_ok=True)
-            ( _DUMP_DIR / "Cookies" ).write_bytes(cookies_raw)
+            (_DUMP_DIR / "Cookies").write_bytes(cookies_raw)
     else:
         result["cookies"] = {"ok": False, "error": cerr}
 
@@ -415,11 +680,15 @@ async def collect_secrets(
     result["accounts"] = await list_android_accounts()
     result["passwords"] = await password_manager_status()
 
+    if include_live:
+        result["live"] = await live_decrypt_sessions(reveal=reveal_live)
+
     result["limitations"] = [
-        "Cookie-Werte: v10-verschlüsselt (Keystore) — Katalog lesbar, Klartext-Value noch nicht.",
-        "Login-Passwörter: keine lokale Chrome 'Login Data'; GMS nur Hashes / Cloud PWM.",
+        "Cookie-DB: Werte v10-encrypted (Keystore) — Katalog aus DB.",
+        "Live-Decrypt: Klartext aus Chrome-Prozessspeicher (chrome decrypt) wenn Chrome läuft.",
+        "Login-Passwörter: keine lokale Chrome Login Data; GMS Hashes / Cloud PWM.",
         "Kartendaten: nur maskiert (last4); CVC/Nummer encrypted.",
-        "Autofill/Adressen/Accounts: Klartext soweit verfügbar.",
+        "Autofill/Adressen/Accounts: Klartext wenn verfügbar.",
     ]
 
     if include_dump:
@@ -430,7 +699,7 @@ async def collect_secrets(
         "collect",
         f"cookies={result.get('cookies', {}).get('total', 0)} "
         f"autofill={result.get('autofill', {}).get('autofill_count', 0)} "
-        f"dump={include_dump}",
+        f"dump={include_dump} live={include_live}",
         erfolg=True,
     )
     _CACHE["at"] = time.time()
@@ -528,6 +797,24 @@ def format_secrets_report(result: dict[str, Any], *, section: str = "all") -> st
         lines.append(f"  {pw.get('note', '')}")
         lines.append("")
 
+    if section in {"all", "live", "decrypt"}:
+        live = result.get("live") or {}
+        if live:
+            if live.get("ok"):
+                lines.append(
+                    f"Live-Decrypt: {live.get('count', 0)} Klartext-Werte "
+                    f"(PID={ (live.get('meta') or {}).get('pid') })"
+                )
+                for it in (live.get("items") or [])[:20]:
+                    lines.append(
+                        f"  {it.get('host')} | {it.get('name')}="
+                        f"{_mask_value(str(it.get('value') or ''), reveal=bool(it.get('reveal')))}"
+                    )
+                lines.append("  Vollständig: chrome decrypt")
+            else:
+                lines.append(f"Live-Decrypt: {live.get('error', '—')}")
+            lines.append("")
+
     if result.get("dump_dir"):
         lines.append(f"Dump: {result['dump_dir']}")
         lines.append("")
@@ -536,5 +823,6 @@ def format_secrets_report(result: dict[str, Any], *, section: str = "all") -> st
         lines.append("Grenzen:")
         for lim in result["limitations"]:
             lines.append(f"  · {lim}")
+        lines.append("  · Klartext-Cookies/Tokens: chrome decrypt (Memory)")
 
     return "\n".join(lines).rstrip()
