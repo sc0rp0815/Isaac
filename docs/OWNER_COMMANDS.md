@@ -59,7 +59,9 @@ URL/Ziel, Browser aus, 2FA/Captcha, Mission-Schritt). Kein Spam bei normalen Feh
 | `ISAAC_NTFY_TOPIC=mein-topic` | Push via [ntfy](https://ntfy.sh) (Handy-App) |
 | `ISAAC_NTFY_URL=https://ntfy.sh` | optional eigener ntfy-Server |
 | `ISAAC_NTFY_TOKEN=…` | optional Auth |
-| `ISAAC_OWNER_PUSH=1` | Owner-Push an (Default on) |
+| `ISAAC_OWNER_WEBHOOK_URL=https://…` | optional JSON-Webhook |
+| `ISAAC_OWNER_PUSH_COOLDOWN_S=21600` | gleicher Blocker max. alle 6h |
+| `ISAAC_OWNER_PUSH_MIN_INTERVAL_S=300` | global min. 5 Min zwischen Pushes |
 | `ISAAC_REMOTE_SMOKE=1` | Background keep-alive gegen isaac-free (wake ≤10 Min) |
 | `ISAAC_REMOTE_SMOKE_WAKE_INTERVAL_S=600` | Anti-Sleep-Intervall |
 | `ISAAC_REMOTE_FREE_URL=https://isaac-free.onrender.com` | Smoke-Ziel |
@@ -71,7 +73,8 @@ ntfy status
 ntfy test
 ```
 
-Topic lokal: `.env` → `ISAAC_NTFY_TOPIC` (Hinweisdatei `data/ntfy_topic_hint.txt`).
+Topic lokal: `.env` → `ISAAC_NTFY_TOPIC` (Hinweisdatei `data/ntfy_topic_hint.txt`).  
+Zusätzlich: Termux-Notification wenn verfügbar; immer Log in `data/owner_blockers.jsonl`.
 
 ### Remote Smoke (Chat)
 
@@ -116,11 +119,19 @@ starte chrome
 
 `öffne chrome` startet **com.android.chrome** (Android), nicht Playwright.  
 Playwright bleibt für Web-Tests/Automation.
-| `ISAAC_OWNER_WEBHOOK_URL=https://…` | optional JSON-Webhook |
-| `ISAAC_OWNER_PUSH_COOLDOWN_S=21600` | gleicher Blocker max. alle 6h |
-| `ISAAC_OWNER_PUSH_MIN_INTERVAL_S=300` | global min. 5 Min zwischen Pushes |
 
-Zusätzlich: Termux-Notification wenn verfügbar; immer Log in `data/owner_blockers.jsonl`.
+### Chrome-Tabs lesen (Magisk + Termux-Brücke)
+
+```text
+chrome tabs
+chrome tabs full
+öffne tab 3
+```
+
+Liest **Browser-Tab-URLs** aus Chrome-Tab-Dateien auf dem Gerät (`su`).  
+Keine Cookies, keine Passwörter — nur URL-Strings (Tokens in Query werden redigiert).  
+Voraussetzung: Magisk-Root über die Termux-Brücke.  
+`öffne tab N` öffnet den zuletzt gelisteten Tab in Android-Chrome.
 
 ### Professionelle Tools
 

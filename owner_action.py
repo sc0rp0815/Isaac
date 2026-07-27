@@ -1115,15 +1115,9 @@ def detect_owner_action(text: str) -> Optional[OwnerAction]:
             if m_in:
                 dest, browser = m_in.group(1).strip(), m_in.group(2).strip().lower()
                 browser = "chrome" if browser == "browser" else browser
-                url = dest
-                if not re.match(r"^https?://", url, re.I):
-                    if re.match(r"^[\w.-]+\.[a-z]{2,}", url, re.I) and " " not in url:
-                        url = f"https://{url}"
-                    else:
-                        url = f"https://www.google.com/search?q={quote_plus(url)}"
                 return OwnerAction(
                     "app_open",
-                    {"name": browser, "url": url},
+                    {"name": browser, "url": _resolve_open_url(dest)},
                     raw=raw,
                 )
             # bare app name
@@ -1140,6 +1134,26 @@ def _detect_app_launch(raw: str, normalized: str) -> Optional[OwnerAction]:
     """Early detect 'öffne/starte chrome' before security_toolkit steals it."""
     if not normalized:
         return None
+    # chrome tabs list / open tab N
+    if normalized in {
+        "chrome tabs",
+        "chrome tab",
+        "tabs",
+        "zeig tabs",
+        "zeige tabs",
+        "list tabs",
+        "chrome tabs full",
+        "tabs full",
+    } or normalized.startswith("chrome tabs"):
+        full = "full" in normalized or "alle" in normalized
+        return OwnerAction("chrome_tabs", {"full": full}, raw=raw)
+    m_tab = re.match(
+        r"^(?:öffne|oeffne|open)\s+tab\s+(\d+)\s*$",
+        normalized,
+    )
+    if m_tab:
+        return OwnerAction("chrome_tab_open", {"index": int(m_tab.group(1))}, raw=raw)
+
     # apps status / bridge status
     if normalized in {
         "apps status",
@@ -1186,12 +1200,7 @@ def _detect_app_launch(raw: str, normalized: str) -> Optional[OwnerAction]:
     if m_in:
         dest, browser = m_in.group(1).strip(), m_in.group(2).strip().lower()
         browser = "chrome" if browser == "browser" else browser
-        url = dest
-        if not re.match(r"^https?://", url, re.I):
-            if re.match(r"^[\w.-]+\.[a-z]{2,}", url, re.I) and " " not in url:
-                url = f"https://{url}"
-            else:
-                url = f"https://www.google.com/search?q={quote_plus(url)}"
+        url = _resolve_open_url(dest)
         return OwnerAction("app_open", {"name": browser, "url": url}, raw=raw)
 
     for pkg_name in sorted(_APP_PACKAGES, key=len, reverse=True):
@@ -1201,6 +1210,34 @@ def _detect_app_launch(raw: str, normalized: str) -> Optional[OwnerAction]:
         if rest == intent_name or rest.startswith(intent_name + " "):
             return OwnerAction("app_open", {"name": intent_name}, raw=raw)
     return None
+
+
+def _resolve_open_url(dest: str) -> str:
+    """Map 'google' / site aliases / bare domains to a concrete https URL."""
+    dest = (dest or "").strip()
+    if not dest:
+        return "https://www.google.de/"
+    lower = _normalize(dest)
+    # known sites first (gmail, google, maps, …)
+    for alias, url in sorted(_SITE_ALIASES.items(), key=lambda x: -len(x[0])):
+        if lower == alias or lower == alias.replace(" ", ""):
+            return url
+    # bare brand → homepage (not search)
+    brand_homes = {
+        "google": "https://www.google.de/",
+        "google.de": "https://www.google.de/",
+        "google.com": "https://www.google.com/",
+        "youtube": "https://www.youtube.com/",
+        "gmail": "https://mail.google.com/",
+        "maps": "https://maps.google.com/",
+    }
+    if lower in brand_homes:
+        return brand_homes[lower]
+    if re.match(r"^https?://", dest, re.I):
+        return dest
+    if re.match(r"^[\w.-]+\.[a-z]{2,}", dest, re.I) and " " not in dest:
+        return f"https://{dest}"
+    return f"https://www.google.com/search?q={quote_plus(dest)}"
 
 
 async def execute_owner_action(action: OwnerAction) -> tuple[str, bool]:
@@ -1217,6 +1254,8 @@ async def execute_owner_action(action: OwnerAction) -> tuple[str, bool]:
         "file_operation": _file_operation,
         "app_open": _app_open,
         "apps_status": _apps_status,
+        "chrome_tabs": _chrome_tabs,
+        "chrome_tab_open": _chrome_tab_open,
         "shell": _shell_action,
         "open_target": _open_target,
         "email_open": _email_open,
@@ -2417,6 +2456,46 @@ async def _clipboard(action: OwnerAction) -> tuple[str, bool]:
             return f"[Owner] Zwischenablage gesetzt ({len(text)} Zeichen).", True
         return f"[Owner] Zwischenablage fehlgeschlagen: {result.get('error', 'unbekannt')}", False
     return "[Owner] Unbekannte Zwischenablage-Operation.", False
+
+
+async def _chrome_tabs(action: OwnerAction) -> tuple[str, bool]:
+    """List Chrome tabs from Magisk-readable storage."""
+    full = bool(action.params.get("full"))
+    try:
+        from chrome_tabs import format_tabs_report, list_tabs
+
+        result = await list_tabs(limit=40, full=full)
+        return format_tabs_report(result), bool(result.get("ok"))
+    except Exception as exc:
+        return f"[Chrome Tabs] Fehler: {exc}", False
+
+
+async def _chrome_tab_open(action: OwnerAction) -> tuple[str, bool]:
+    """Open cached tab index in Android Chrome."""
+    idx = int(action.params.get("index") or 0)
+    try:
+        from chrome_tabs import get_cached_tab, list_tabs
+
+        tab = get_cached_tab(idx)
+        if not tab:
+            # refresh once
+            await list_tabs(limit=40, full=False)
+            tab = get_cached_tab(idx)
+        if not tab:
+            return (
+                f"[Chrome Tabs] Tab {idx} unbekannt — zuerst: chrome tabs",
+                False,
+            )
+        url = tab.get("url") or ""
+        return await _app_open(
+            OwnerAction(
+                "app_open",
+                {"name": "chrome", "url": url},
+                raw=action.raw,
+            )
+        )
+    except Exception as exc:
+        return f"[Chrome Tabs] Öffnen fehlgeschlagen: {exc}", False
 
 
 async def _apps_status(action: OwnerAction) -> tuple[str, bool]:
