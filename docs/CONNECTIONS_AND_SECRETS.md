@@ -54,7 +54,7 @@ Registered tools (`kind=bridge`):
 ```text
 github: me
 github: issues glinkasteffen075-bit/Isaac
-github: prs sco0rp/IsaacNew
+github: prs sc0rp0815/Isaac
 fetch: https://example.com
 code: prüfe offene Issues auf glinkasteffen075-bit/Isaac
 ```

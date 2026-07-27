@@ -244,7 +244,7 @@ Muss ausführen, nicht reinterpretieren. Respektiert nur den übergebenen Task-/
 python3 -m py_compile isaac_core.py executor.py low_complexity.py memory.py relay.py logic.py watchdog.py task_checkpoint.py
 cd /root/Isaac && .venv/bin/python sanity_check.py
 cd /root/Isaac && ISAAC_DISABLE_VECTOR_MEMORY=1 .venv/bin/python -m unittest tests_phase_a_stabilization tests_state_io tests_provider_configuration
-python3 scripts/check_deploy_sync.py   # lokal ↔ sco0rp/glinka main ↔ Render live
+python3 scripts/check_deploy_sync.py   # lokal ↔ sc0rp0815/sco0rp/glinka main ↔ Render live
 cd /root/Isaac && .venv/bin/python isaac_core.py   # Dashboard :8766, WS :8765 (lokal)
 cd /root/Isaac && bash run_isaac.sh
 ```
@@ -299,7 +299,7 @@ Vergleicht:
 | Quelle | Was |
 |--------|-----|
 | Lokal | `HEAD` / Branch |
-| Remotes | `sco0rp/main`, `glinka/main`, `origin/main` (wenn vorhanden) |
+| Remotes | `sc0rp0815/main` (preferred), `sco0rp/main`, `glinka/main`, `origin/main` |
 | Render API | Live-Deploy-Commit (`RENDER_API_KEY` + Service-ID) |
 | Health | `ISAAC_REMOTE_FREE_URL` oder `https://isaac-free.onrender.com/healthz` (Keys + optional `git_commit`) |
 

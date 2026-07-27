@@ -12,7 +12,8 @@ Env (optional):
   ISAAC_REMOTE_FREE_URL   — health URL (default https://isaac-free.onrender.com)
   GITHUB_TOKEN / GH_TOKEN — optional, for private remote tips via API fallback
 
-Remotes checked when present: sco0rp, glinka, origin (branch main).
+Remotes checked when present: sc0rp0815, sco0rp, glinka, origin (branch main).
+Canonical deploy remote (preferred): sc0rp0815 → sc0rp0815/Isaac
 """
 
 from __future__ import annotations
@@ -173,17 +174,18 @@ def healthz(url: str) -> dict[str, Any]:
 
 def collect_report() -> dict[str, Any]:
     # refresh remotes best-effort
-    for remote in ("sco0rp", "glinka", "origin"):
+    for remote in ("sc0rp0815", "sco0rp", "glinka", "origin"):
         _run(["git", "fetch", remote, "main"])
 
     local_head = _git_rev("HEAD")
     local_branch_rc, local_branch = _run(["git", "branch", "--show-current"])
     branch = local_branch if local_branch_rc == 0 else ""
 
-    # Primary remotes that must match for "deploy sync" (Render tracks sco0rp/IsaacNew)
-    primary_names = ("sco0rp", "glinka")
+    # Primary remotes for deploy sync. Preferred canonical: sc0rp0815/Isaac
+    # (legacy sco0rp/IsaacNew still checked when present).
+    primary_names = ("sc0rp0815", "sco0rp", "glinka")
     remotes: dict[str, Any] = {}
-    for name in ("sco0rp", "glinka", "origin"):
+    for name in ("sc0rp0815", "sco0rp", "glinka", "origin"):
         ref = f"{name}/main"
         sha = _git_rev(ref)
         if sha:
@@ -203,24 +205,24 @@ def collect_report() -> dict[str, Any]:
     ).strip()
     health = healthz(health_url)
 
-    # compare — only primary remotes (sco0rp/glinka) must align; origin may be another fork
+    # compare — primary remotes should align; origin may be another fork
     primary_shas = {
         v["sha"] for n, v in remotes.items() if v.get("primary") and v.get("sha")
     }
     remotes_aligned = len(primary_shas) <= 1
     canonical = None
-    if "sco0rp" in remotes:
-        canonical = remotes["sco0rp"]["sha"]
-    elif "glinka" in remotes:
-        canonical = remotes["glinka"]["sha"]
-    elif local_head:
+    for preferred in ("sc0rp0815", "sco0rp", "glinka"):
+        if preferred in remotes:
+            canonical = remotes[preferred]["sha"]
+            break
+    if not canonical and local_head:
         canonical = local_head
 
     render_sha = render.get("commit") if render.get("ok") else None
 
     issues: list[str] = []
     if not remotes_aligned and len(primary_shas) > 1:
-        issues.append("primary remotes sco0rp/glinka main tips diverge")
+        issues.append("primary remotes (sc0rp0815/sco0rp/glinka) main tips diverge")
     if local_head and canonical and local_head != canonical and branch == "main":
         issues.append(f"local main HEAD {local_head[:7]} != remote main {canonical[:7]}")
     if render.get("ok") and canonical and render_sha:

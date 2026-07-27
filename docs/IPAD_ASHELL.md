@@ -38,7 +38,7 @@ Nur wenn Python 3.10+ und `pip` in a-Shell verfügbar sind.
 ```bash
 # Beispiel — Pfade je nach a-Shell anpassen
 cd ~
-git clone https://github.com/sco0rp/IsaacNew.git isaacnew   # oder dein Remote
+git clone https://github.com/sc0rp0815/Isaac.git isaacnew   # preferred; legacy: sco0rp/IsaacNew
 cd isaacnew
 git checkout main
 git pull

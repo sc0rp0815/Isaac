@@ -181,7 +181,9 @@ def _probe_github() -> dict[str, Any]:
         "cloud_repo": (os.getenv("ISAAC_COPILOT_CLOUD_REPO") or "").strip() or None,
         "auto_pr": _env_bool("ISAAC_GH_AUTO_PR", False),
         "auto_merge": _env_bool("ISAAC_GH_AUTO_MERGE", False),
-        "allowlist": (os.getenv("ISAAC_GH_REPO_ALLOWLIST") or "sco0rp/IsaacNew").strip(),
+        "allowlist": (
+            os.getenv("ISAAC_GH_REPO_ALLOWLIST") or "sc0rp0815/Isaac,sco0rp/IsaacNew"
+        ).strip(),
     }
     if not token:
         out["error"] = "no GITHUB_TOKEN / GH_TOKEN / COPILOT_GITHUB_TOKEN"

@@ -143,7 +143,7 @@ Vollständige Ablehnung: `docs/DRIVE_PATCH_REVIEW_2026-07-24.md`.
 | Drive-Patches abgelehnt + portable Trace | #29 |
 | Soft-Checkpoints + package-shell Constitution + Evals 70 | #30 |
 | Goal-Eval-Suite + Routing-Regression → **96/96** | #31 |
-| Repo-Sync glinka ↔ sco0rp main | laufend |
+| Repo-Sync sc0rp0815 ↔ sco0rp ↔ glinka main | laufend (preferred: sc0rp0815/Isaac) |
 
 ---
 

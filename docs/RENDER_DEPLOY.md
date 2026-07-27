@@ -2,7 +2,7 @@
 
 ## Voraussetzungen
 
-1. GitHub-Account mit Zugriff auf **sco0rp/IsaacNew** (Branch mit Free-Cloud-Code)
+1. GitHub-Account mit Zugriff auf **sc0rp0815/Isaac** (preferred; legacy: sco0rp/IsaacNew)
 2. Kostenloser Account: https://dashboard.render.com/register  
 3. Groq-Key: https://console.groq.com/keys  
    (neuen Key erzeugen, nicht den aus dem Chat wiederverwenden)
@@ -12,7 +12,7 @@
 ### A) Blueprint (empfohlen)
 
 1. https://dashboard.render.com → **New +** → **Blueprint**
-2. GitHub verbinden, Repo wählen: **sco0rp/IsaacNew**
+2. GitHub verbinden, Repo wählen: **sc0rp0815/Isaac**
 3. Branch: **`main`** (oder `main` nach Merge)
 4. Blueprint-Datei: **`render.yaml`** (Repo-Root)
 5. **Apply** / Create
@@ -25,7 +25,7 @@
 ### B) Manuell (ohne Blueprint)
 
 1. **New +** → **Web Service**
-2. Repo **sco0rp/IsaacNew**, Branch wie oben
+2. Repo **sc0rp0815/Isaac**, Branch wie oben
 3. Runtime: **Docker**
 4. Dockerfile path: **`Dockerfile.free`**
 5. Instance type: **Free**
