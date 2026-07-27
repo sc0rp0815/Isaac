@@ -132,6 +132,74 @@ class TestLiveDecryptHelpers(unittest.TestCase):
         )
         self.assertIn("SID=secretvalue123", text)
 
+    def test_cookie_jar_write(self):
+        from chrome_secrets import items_to_cookie_jar, write_cookie_jar
+        from pathlib import Path
+
+        items = [
+            {"host": ".google.com", "name": "SID", "value": "abc123session"},
+            {"host": "(oauth-token)", "name": "access_token", "value": "tok"},
+            {"host": ".google.com", "name": "HSID", "value": "hsidval99"},
+        ]
+        entries = items_to_cookie_jar(items)
+        self.assertEqual(len(entries), 2)
+        self.assertTrue(all(e["name"] != "access_token" for e in entries))
+        written = write_cookie_jar(entries, basename="test_cookies")
+        self.assertTrue(written["ok"])
+        p = Path(written["netscape_path"])
+        self.assertTrue(p.exists())
+        body = p.read_text(encoding="utf-8")
+        self.assertIn("SID", body)
+        self.assertIn("Netscape", body)
+        # cleanup
+        for key in ("netscape_path", "json_path", "header_path"):
+            Path(written[key]).unlink(missing_ok=True)
+
+    def test_detect_ui_passwords_and_jar(self):
+        from owner_action import detect_owner_action
+
+        a = detect_owner_action("ui passwords")
+        self.assertEqual(a.kind, "ui_passwords")
+        a2 = detect_owner_action("passwortfelder")
+        self.assertEqual(a2.kind, "ui_passwords")
+        a3 = detect_owner_action("cookie jar")
+        self.assertEqual(a3.kind, "cookie_jar_export")
+        a4 = detect_owner_action("export cookies")
+        self.assertEqual(a4.kind, "cookie_jar_export")
+
+
+class TestUiPasswordExtract(unittest.TestCase):
+    def test_extract_password_fields(self):
+        from android_apps import extract_password_fields
+        from ui_automation import UINode
+
+        nodes = [
+            UINode(
+                text="user@example.com",
+                content_desc="",
+                resource_id="email",
+                class_name="android.widget.EditText",
+                clickable=True,
+                enabled=True,
+                is_password=False,
+                bounds=(10, 10, 100, 50),
+            ),
+            UINode(
+                text="Secret123!",
+                content_desc="Passwort",
+                resource_id="password",
+                class_name="android.widget.EditText",
+                clickable=True,
+                enabled=True,
+                is_password=True,
+                bounds=(10, 60, 100, 100),
+            ),
+        ]
+        fields = extract_password_fields(nodes, activity="demo")
+        self.assertEqual(len(fields), 1)
+        self.assertEqual(fields[0]["password_text"], "Secret123!")
+        self.assertEqual(fields[0]["username"], "user@example.com")
+
 
 class TestAndroidAppsSearch(unittest.TestCase):
     def test_search(self):

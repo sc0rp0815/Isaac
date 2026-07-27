@@ -141,16 +141,19 @@ chrome secrets dump
 | `chrome cookies` | nur Cookie-Hosts/Namen (DB: v10-encrypted) |
 | `chrome autofill` | Formular-Historie (Klartext wo verfügbar) |
 | `chrome passwords` | Status Google Password Manager (lokal meist nur Hashes) |
-| `chrome decrypt` | **Klartext** Cookies/Tokens aus Chrome-Prozessspeicher (live) |
+| `chrome decrypt` | **Klartext** Cookies/Tokens aus Chrome-Prozessspeicher (+ Cookie-Jar) |
 | `chrome decrypt mask` | wie oben, Werte maskiert |
 | `chrome decrypt für SID` | nur Name-Filter |
+| `cookie jar` / `export cookies` | Netscape + JSON + Header Cookie-Jar neu bauen |
+| `ui passwords` / `passwortfelder` | Passwort-Felder aus aktuellem UI (uiautomator) |
 
-**Decrypt-Pfad:** Keine kryptografische OSCrypt-Knackung der Cookie-DB. Stattdessen
-Memory-Scan des laufenden Chrome-Prozesses (`/proc/PID/mem`) — Werte, die Chrome
-bereits entschlüsselt im RAM hält (Sessions, SID/HSID, OAuth-Tokens, …).  
-Voraussetzung: Chrome läuft; Magisk-Root; Termux-Brücke.  
-Export: `data/chrome_secrets_dump/live_sessions.json`  
-Audit loggt nur Metadaten (Anzahl/PID), keine Klartext-Secrets.
+**Decrypt-Pfad:** Memory-Scan des laufenden Chrome-Prozesses (`/proc/PID/mem`).  
+**Cookie-Jar Export** (nach Decrypt):
+- `data/chrome_secrets_dump/cookies.txt` — Netscape (curl `-b`)
+- `data/chrome_secrets_dump/cookies.json`
+- `data/chrome_secrets_dump/cookies.header.txt` — `Cookie:` Header pro Domain  
+**UI-Passwörter:** Login-Screen öffnen → `ui passwords` (optional „Passwort anzeigen“ tippen).  
+Audit loggt nur Metadaten, keine Klartext-Secrets.
 
 ### Alle Android-Apps steuern
 
