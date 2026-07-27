@@ -94,6 +94,55 @@ class TestExternalMemoryFailSoft(unittest.TestCase):
                 self.assertIn("mem0", high["written"])
 
 
+class TestMem0PlatformConfig(unittest.TestCase):
+    def test_api_key_auto_enables_mem0(self):
+        saved = {
+            k: os.environ.get(k)
+            for k in (
+                "MEM0_API_KEY",
+                "ISAAC_MEM0_ENABLED",
+                "ISAAC_MEM0_ALLOW_CLOUD",
+                "ISAAC_EXTERNAL_MEMORY_WRITE",
+            )
+        }
+        try:
+            for k in ("ISAAC_MEM0_ENABLED", "ISAAC_MEM0_ALLOW_CLOUD", "ISAAC_EXTERNAL_MEMORY_WRITE"):
+                os.environ.pop(k, None)
+            os.environ["MEM0_API_KEY"] = "m0-test-key-not-real"
+            from external_memory.config import load_external_memory_config
+            from external_memory import reset_external_memory_bridge
+
+            reset_external_memory_bridge()
+            cfg = load_external_memory_config()
+            self.assertTrue(cfg.mem0_api_key.startswith("m0-"))
+            self.assertTrue(cfg.mem0_enabled)
+            self.assertTrue(cfg.mem0_allow_cloud)
+        finally:
+            for k, v in saved.items():
+                if v is None:
+                    os.environ.pop(k, None)
+                else:
+                    os.environ[k] = v
+
+    def test_normalize_platform_results(self):
+        from external_memory.config import ExternalMemoryConfig
+        from external_memory.mem0_adapter import Mem0Adapter
+
+        adapter = Mem0Adapter(
+            ExternalMemoryConfig(mem0_enabled=True, mem0_api_key="m0-x", mem0_allow_cloud=True)
+        )
+        adapter._tried = True
+        adapter._mode = "platform"
+        adapter._use_rest = True
+        hits = adapter._normalize_search(
+            {"results": [{"memory": "likes coffee", "score": 0.9}]},
+            limit=5,
+        )
+        self.assertEqual(len(hits), 1)
+        self.assertEqual(hits[0]["text"], "likes coffee")
+        self.assertEqual(hits[0]["source"], "mem0")
+
+
 class TestMem0AdapterMapping(unittest.TestCase):
     def test_mem0_adapter_maps_results(self):
         from external_memory.config import ExternalMemoryConfig

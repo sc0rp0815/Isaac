@@ -54,6 +54,8 @@ class ExternalMemoryConfig:
     max_hit_chars: int = 400
     owner_id: str = "Steffen"
     mem0_allow_cloud: bool = False
+    mem0_api_key: str = ""
+    mem0_base_url: str = "https://api.mem0.ai"
     cognee_allow_cloud: bool = False
     letta_allow_cloud: bool = False
     cognee_base_url: str = ""
@@ -125,14 +127,26 @@ def load_external_memory_config() -> ExternalMemoryConfig:
         or os.getenv("ISAAC_OLLAMA_HOST")
         or "http://127.0.0.1:11434"
     ).rstrip("/")
+    mem0_api_key = (
+        os.getenv("MEM0_API_KEY") or os.getenv("ISAAC_MEM0_API_KEY") or ""
+    ).strip()
+    # Auto-enable platform path when API key present (unless explicitly disabled)
+    mem0_key_present = bool(mem0_api_key)
+    mem0_enabled = _env_bool("ISAAC_MEM0_ENABLED", mem0_key_present)
+    mem0_allow_cloud = _env_bool("ISAAC_MEM0_ALLOW_CLOUD", mem0_key_present)
+    # Writes: on by default when platform key is configured
+    write_enabled = _env_bool(
+        "ISAAC_EXTERNAL_MEMORY_WRITE",
+        mem0_key_present,
+    )
     return ExternalMemoryConfig(
-        mem0_enabled=_env_bool("ISAAC_MEM0_ENABLED", False),
+        mem0_enabled=mem0_enabled,
         cognee_enabled=_env_bool("ISAAC_COGNEE_ENABLED", False),
         letta_enabled=_env_bool("ISAAC_LETTA_ENABLED", False),
         open_interpreter_enabled=_env_bool("ISAAC_OPEN_INTERPRETER_ENABLED", False),
         grok_agent_enabled=_env_bool("ISAAC_GROK_AGENT_ENABLED", False),
         copilot_agent_enabled=_env_bool("ISAAC_COPILOT_AGENT_ENABLED", False),
-        write_enabled=_env_bool("ISAAC_EXTERNAL_MEMORY_WRITE", False),
+        write_enabled=write_enabled,
         min_score=_env_float("ISAAC_EXTERNAL_MEMORY_MIN_SCORE", 5.0),
         search_timeout_s=max(
             0.5, min(60.0, _env_float("ISAAC_EXTERNAL_MEMORY_SEARCH_TIMEOUT", 2.5))
@@ -146,7 +160,14 @@ def load_external_memory_config() -> ExternalMemoryConfig:
         ),
         max_hit_chars=max(80, min(2000, _env_int("ISAAC_EXTERNAL_MEMORY_MAX_HIT_CHARS", 400))),
         owner_id=owner,
-        mem0_allow_cloud=_env_bool("ISAAC_MEM0_ALLOW_CLOUD", False),
+        mem0_allow_cloud=mem0_allow_cloud,
+        mem0_api_key=mem0_api_key,
+        mem0_base_url=(
+            os.getenv("MEM0_BASE_URL")
+            or os.getenv("ISAAC_MEM0_BASE_URL")
+            or "https://api.mem0.ai"
+        ).strip().rstrip("/")
+        or "https://api.mem0.ai",
         cognee_allow_cloud=_env_bool("ISAAC_COGNEE_ALLOW_CLOUD", False),
         letta_allow_cloud=_env_bool("ISAAC_LETTA_ALLOW_CLOUD", False),
         cognee_base_url=(

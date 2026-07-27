@@ -38,7 +38,7 @@ Optional BLAU-Ergänzung unter `external_memory/`. **Kein** Ersatz von `memory.p
 
 | System | Rolle in Isaac | Default | Write |
 |--------|----------------|---------|-------|
-| Mem0 OSS (`mem0ai`) | Präferenz/Fakten-Hints → Retrieval | OFF | nur `ISAAC_EXTERNAL_MEMORY_WRITE=1` + Score-Gate |
+| Mem0 Platform API + OSS | Präferenz/Fakten-Hints → Retrieval | ON wenn `MEM0_API_KEY` | auto-write bei Key + Score-Gate |
 | Cognee | Graph-Memory (`remember`/`recall`) → `semantic_context` | OFF | wie Mem0 |
 | Letta Code CLI + Cloud API | Memory-Hints + Companion, **nicht** Orchestrator | OFF | archival write nur mit Write-Flag; `letta: …` explizit |
 | Open Interpreter (Codex harness) | Companion CLI, **nicht** Orchestrator | OFF | nur `oi:` / `interpreter: …`; Sandbox default `read-only` |
@@ -46,7 +46,8 @@ Optional BLAU-Ergänzung unter `external_memory/`. **Kein** Ersatz von `memory.p
 **Flags:** `ISAAC_MEM0_ENABLED`, `ISAAC_COGNEE_ENABLED`, `ISAAC_LETTA_ENABLED`, `ISAAC_OPEN_INTERPRETER_ENABLED`, `ISAAC_EXTERNAL_MEMORY_WRITE`.  
 **Gates:** `ISAAC_EXTERNAL_MEMORY_SEARCH_TIMEOUT`, `…_SEARCH_MIN_SCORE`, `…_MIN_SCORE` (write), `…_MAX_HIT_CHARS`.  
 **Install:** `bash scripts/install_external_memory.sh` / `requirements-memory-extra.txt`; OI: Binary `interpreter` + `docs/OPEN_INTERPRETER.md`.  
-**Cloud:** Mem0/Cognee/Letta Cloud nur mit `*_ALLOW_CLOUD=1`.  
+**Cloud:** Mem0 Platform: `MEM0_API_KEY` (+ optional `ISAAC_MEM0_ALLOW_CLOUD=1`, auto wenn Key gesetzt).  
+REST-Fallback ohne SDK (`api.mem0.ai`). Local OSS nur ohne Platform-Key (Ollama+Chroma).  
 Cognee: `COGNEE_BASE_URL` + `COGNEE_API_KEY` + `ISAAC_COGNEE_ALLOW_CLOUD=1`. Seed: `scripts/seed_cognee_cloud.py`.  
 Letta: `LETTA_API_KEY` + `ISAAC_LETTA_ALLOW_CLOUD=1` (+ optional `LETTA_AGENT_ID`) — siehe [LETTA.md](LETTA.md).  
 **Fail-soft:** Timeout / fehlende Packages / Credits → leere Hits oder klarer Fehler, Kernel bleibt runnable.  
