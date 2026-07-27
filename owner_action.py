@@ -6,6 +6,7 @@ Erkennt imperative Owner-Befehle in natürlicher Sprache und führt sie
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
@@ -826,6 +827,29 @@ def detect_owner_action(text: str) -> Optional[OwnerAction]:
     if app_launch:
         return app_launch
 
+    # Bug bounty (authorized programs only)
+    if normalized in {
+        "bug bounty",
+        "bugbounty",
+        "bug bounty status",
+        "bug bounty list",
+        "bounty status",
+        "bounty list",
+    } or normalized.startswith("bug bounty list") or normalized.startswith(
+        "bug bounty status"
+    ):
+        return OwnerAction("bug_bounty", {"op": "list"}, raw=raw)
+    m_bb = re.match(
+        r"^(?:bug\s*bounty|bounty)\s+scan\s+([a-zA-Z0-9._\-]+)\s*$",
+        normalized,
+    )
+    if m_bb:
+        return OwnerAction(
+            "bug_bounty",
+            {"op": "scan", "program_id": m_bb.group(1)},
+            raw=raw,
+        )
+
     if is_owner_equivalent_mode():
         from security_toolkit import parse_security_command
 
@@ -1469,6 +1493,7 @@ async def execute_owner_action(action: OwnerAction) -> tuple[str, bool]:
         "git_command": _git_command,
         "package_install": _package_install,
         "security_toolkit": _security_toolkit,
+        "bug_bounty": _bug_bounty,
         "credential_access": _credential_access,
         "isaac_ops": _isaac_ops,
     }
@@ -2534,6 +2559,29 @@ async def _security_toolkit(action: OwnerAction) -> tuple[str, bool]:
     except Exception as exc:
         log.debug("Security procedure capture skipped: %s", exc)
     return result, ok
+
+
+async def _bug_bounty(action: OwnerAction) -> tuple[str, bool]:
+    """Authorized bug-bounty list/scan with tested evidence reports."""
+    op = str(action.params.get("op") or "list").strip().lower()
+    try:
+        from bug_bounty import (
+            format_programs_report,
+            format_scan_report,
+            run_program_scan,
+        )
+
+        if op in {"list", "status", "programs"}:
+            return format_programs_report(), True
+        if op == "scan":
+            pid = str(action.params.get("program_id") or "").strip()
+            if not pid:
+                return "[BugBounty] program_id fehlt — bug bounty scan <id>", False
+            result = await asyncio.to_thread(run_program_scan, pid)
+            return format_scan_report(result), bool(result.get("ok"))
+        return f"[BugBounty] Unbekannte Op: {op}", False
+    except Exception as exc:
+        return f"[BugBounty] Fehler: {exc}", False
 
 
 async def _package_install(action: OwnerAction) -> tuple[str, bool]:

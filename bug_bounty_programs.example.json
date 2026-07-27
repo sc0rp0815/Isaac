@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "note": "Kopiere nach data/bug_bounty_programs.json (gitignored). Nur Programme, an denen du teilnimmst.",
+  "programs": [
+    {
+      "id": "example-public-demo",
+      "platform": "manual",
+      "name": "Example (ersetzen)",
+      "program_url": "https://example.com",
+      "enabled": false,
+      "authorized": false,
+      "in_scope_hosts": ["example.com", "www.example.com"],
+      "in_scope_url_prefixes": ["https://example.com/", "https://www.example.com/"],
+      "out_of_scope": [],
+      "max_hosts": 5,
+      "allow_active": false,
+      "notes": "authorized=true erst nach Scope-Lesen und Program-Signup"
+    }
+  ]
+}

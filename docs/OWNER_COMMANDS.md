@@ -48,6 +48,25 @@ ausgeführt — nicht nur im Chat „beschrieben“. Antworten brauchen `[Eviden
 
 Siehe Modul `execution_contract.py`.
 
+### Bug-Bounty (autorisiert, getestet)
+
+```text
+bug bounty list
+bug bounty scan <program_id>
+```
+
+Konfiguration: `data/bug_bounty_programs.json` (Vorlage: `bug_bounty_programs.example.json`).
+
+| Regel | Bedeutung |
+|-------|-----------|
+| `authorized=true` | Du nimmst am Programm teil / Scope gelesen |
+| `enabled=true` | Scan freigeschaltet |
+| `in_scope_hosts` | Nur diese Hosts (+ optionale CT-Subdomains unter denselben Roots) |
+| `allow_active=false` | Default: passive Checks (DNS/TLS/HTTP-Header/CORS-Probe) |
+
+Reports: `workspace/bug_bounty/<id>/<timestamp>/report.md` mit **Evidence + Reproduction**.  
+Kein Claim ohne Test. Kein Mass-Scan des Internets.
+
 ### Owner-Push (nur bei echten Blockern)
 
 Isaac pusht **nur**, wenn er wirklich nicht weiterkommt (Credentials, API-Keys,
