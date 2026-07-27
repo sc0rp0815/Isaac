@@ -1154,7 +1154,45 @@ def _detect_app_launch(raw: str, normalized: str) -> Optional[OwnerAction]:
     if m_tab:
         return OwnerAction("chrome_tab_open", {"index": int(m_tab.group(1))}, raw=raw)
 
-    # apps status / bridge status
+    # chrome secrets / cookies / autofill / accounts / passwords
+    if normalized in {
+        "chrome secrets",
+        "chrome secret",
+        "secrets chrome",
+        "chrome cookies",
+        "chrome autofill",
+        "chrome accounts",
+        "chrome karten",
+        "chrome cards",
+        "chrome passwords",
+        "chrome passwörter",
+        "chrome passwoerter",
+    } or normalized.startswith("chrome secrets") or normalized.startswith(
+        "chrome cookies"
+    ) or normalized.startswith("chrome autofill"):
+        section = "all"
+        if "cookie" in normalized:
+            section = "cookies"
+        elif "autofill" in normalized or "formular" in normalized:
+            section = "autofill"
+        elif "account" in normalized or "konten" in normalized:
+            section = "accounts"
+        elif "passwort" in normalized or "password" in normalized:
+            section = "passwords"
+        elif "karte" in normalized or "card" in normalized or "payment" in normalized:
+            section = "payments"
+        dump = "dump" in normalized or "export" in normalized
+        host = ""
+        m_host = re.search(r"(?:host|domain|für|fuer|von)\s+([\w.-]+)", normalized)
+        if m_host:
+            host = m_host.group(1)
+        return OwnerAction(
+            "chrome_secrets",
+            {"section": section, "dump": dump, "host": host},
+            raw=raw,
+        )
+
+    # apps list / search / activity / ui
     if normalized in {
         "apps status",
         "app status",
@@ -1164,6 +1202,62 @@ def _detect_app_launch(raw: str, normalized: str) -> Optional[OwnerAction]:
         "android apps",
     } or normalized.startswith("apps status"):
         return OwnerAction("apps_status", {}, raw=raw)
+    if normalized in {"apps list", "app list", "liste apps", "appliste"} or normalized.startswith(
+        "apps list"
+    ) or normalized.startswith("app list") or normalized.startswith("suche app"):
+        q = ""
+        m_q = re.match(
+            r"^(?:apps?\s+list|liste\s+apps|suche\s+app|apps?)\s+(.+)$",
+            normalized,
+        )
+        if m_q:
+            q = m_q.group(1).strip()
+        third = "user" in normalized or "third" in normalized or "installiert" in normalized
+        return OwnerAction("apps_list", {"query": q, "third_party": third}, raw=raw)
+    if normalized in {"activity", "aktuelle app", "current app", "foreground app"}:
+        return OwnerAction("android_activity", {}, raw=raw)
+    if normalized in {"ui dump", "ui baum", "ui list", "screen ui", "ui"}:
+        return OwnerAction("android_ui_dump", {}, raw=raw)
+    m_tip = re.match(
+        r"^(?:tippe|tap|klicke|click)\s+(?:auf\s+)?(.+)$",
+        normalized,
+    )
+    if m_tip:
+        body = m_tip.group(1).strip()
+        m_xy = re.match(r"^(?:xy\s+)?(\d+)\s+(\d+)$", body)
+        if m_xy:
+            return OwnerAction(
+                "android_input",
+                {"op": "tap_xy", "x": int(m_xy.group(1)), "y": int(m_xy.group(2))},
+                raw=raw,
+            )
+        return OwnerAction("android_input", {"op": "tap_label", "label": body}, raw=raw)
+    m_text = re.match(
+        r"^(?:text|tippe text|type|schreibe|eingabe)\s+(.+)$",
+        normalized,
+    )
+    if m_text:
+        return OwnerAction(
+            "android_input",
+            {"op": "text", "text": m_text.group(1).strip()},
+            raw=raw,
+        )
+    m_key = re.match(r"^(?:key|taste|keyevent)\s+(\w+)$", normalized)
+    if m_key:
+        return OwnerAction(
+            "android_input",
+            {"op": "key", "key": m_key.group(1)},
+            raw=raw,
+        )
+    if normalized in {"back", "zurück", "zurueck", "home taste", "home key"}:
+        key = "home" if "home" in normalized else "back"
+        return OwnerAction("android_input", {"op": "key", "key": key}, raw=raw)
+    m_stop = re.match(
+        r"^(?:stop|stoppe|beende|force.?stop)\s+(?:app\s+)?(.+)$",
+        normalized,
+    )
+    if m_stop:
+        return OwnerAction("app_stop", {"name": m_stop.group(1).strip()}, raw=raw)
 
     if not normalized.startswith(_OPEN_PREFIXES) and not re.match(
         r"^(starte|öffne|oeffne)(\s+die)?\s+app\s+", normalized
@@ -1178,6 +1272,9 @@ def _detect_app_launch(raw: str, normalized: str) -> Optional[OwnerAction]:
             for pkg_name in sorted(_APP_PACKAGES, key=len, reverse=True):
                 if candidate == pkg_name or candidate.endswith(" " + pkg_name):
                     return OwnerAction("app_open", {"name": pkg_name}, raw=raw)
+            # fuzzy unknown app name
+            if candidate and len(candidate) >= 2:
+                return OwnerAction("app_open", {"name": candidate}, raw=raw)
         return None
 
     # strip open prefixes
@@ -1209,6 +1306,9 @@ def _detect_app_launch(raw: str, normalized: str) -> Optional[OwnerAction]:
     for intent_name in sorted(_ANDROID_INTENTS, key=len, reverse=True):
         if rest == intent_name or rest.startswith(intent_name + " "):
             return OwnerAction("app_open", {"name": intent_name}, raw=raw)
+    # any remaining name → resolve via package search at execute time
+    if rest:
+        return OwnerAction("app_open", {"name": rest}, raw=raw)
     return None
 
 
@@ -1256,6 +1356,12 @@ async def execute_owner_action(action: OwnerAction) -> tuple[str, bool]:
         "apps_status": _apps_status,
         "chrome_tabs": _chrome_tabs,
         "chrome_tab_open": _chrome_tab_open,
+        "chrome_secrets": _chrome_secrets,
+        "apps_list": _apps_list,
+        "app_stop": _app_stop,
+        "android_activity": _android_activity,
+        "android_ui_dump": _android_ui_dump,
+        "android_input": _android_input,
         "shell": _shell_action,
         "open_target": _open_target,
         "email_open": _email_open,
@@ -2498,6 +2604,105 @@ async def _chrome_tab_open(action: OwnerAction) -> tuple[str, bool]:
         return f"[Chrome Tabs] Öffnen fehlgeschlagen: {exc}", False
 
 
+async def _chrome_secrets(action: OwnerAction) -> tuple[str, bool]:
+    """Read Chrome cookies catalog, autofill, cards, accounts (owner)."""
+    section = str(action.params.get("section") or "all")
+    dump = bool(action.params.get("dump"))
+    host = str(action.params.get("host") or "").strip()
+    try:
+        from chrome_secrets import collect_secrets, format_secrets_report
+
+        result = await collect_secrets(
+            host_filter=host,
+            include_dump=dump,
+        )
+        return format_secrets_report(result, section=section), bool(result.get("ok"))
+    except Exception as exc:
+        return f"[Chrome Secrets] Fehler: {exc}", False
+
+
+async def _apps_list(action: OwnerAction) -> tuple[str, bool]:
+    query = str(action.params.get("query") or "").strip()
+    third = bool(action.params.get("third_party"))
+    try:
+        from android_apps import format_apps_list, list_packages
+
+        result = await list_packages(third_party_only=third)
+        return format_apps_list(result, query=query), bool(result.get("ok") or result.get("packages"))
+    except Exception as exc:
+        return f"[Apps] Liste fehlgeschlagen: {exc}", False
+
+
+async def _app_stop(action: OwnerAction) -> tuple[str, bool]:
+    name = str(action.params.get("name") or "").strip()
+    try:
+        from android_apps import force_stop, resolve_package
+
+        resolved = await resolve_package(name)
+        if not resolved.get("ok"):
+            return f"[Apps] Stop: {resolved.get('error')}", False
+        pkg = resolved["package"]
+        result = await force_stop(pkg)
+        if result.get("ok"):
+            return f"[Apps] force-stop: {pkg}", True
+        return f"[Apps] force-stop fehlgeschlagen: {result.get('error') or result}", False
+    except Exception as exc:
+        return f"[Apps] Stop Fehler: {exc}", False
+
+
+async def _android_activity(action: OwnerAction) -> tuple[str, bool]:
+    try:
+        from android_apps import current_activity
+
+        result = await current_activity()
+        if result.get("focus"):
+            return f"[Apps] Vordergrund: {result['focus']}", True
+        raw = (result.get("raw") or "")[:400]
+        return f"[Apps] Activity:\n{raw or result.get('error') or 'unbekannt'}", bool(raw)
+    except Exception as exc:
+        return f"[Apps] Activity Fehler: {exc}", False
+
+
+async def _android_ui_dump(action: OwnerAction) -> tuple[str, bool]:
+    try:
+        from android_apps import format_ui_dump, ui_dump_text
+
+        result = await ui_dump_text()
+        return format_ui_dump(result), bool(result.get("ok"))
+    except Exception as exc:
+        return f"[UI] Dump Fehler: {exc}", False
+
+
+async def _android_input(action: OwnerAction) -> tuple[str, bool]:
+    op = str(action.params.get("op") or "").strip()
+    try:
+        from android_apps import input_key, input_tap, input_text, ui_tap_label
+
+        if op == "tap_xy":
+            r = await input_tap(int(action.params.get("x") or 0), int(action.params.get("y") or 0))
+            return (
+                f"[UI] tap {r.get('x')},{r.get('y')} ok={r.get('ok')}",
+                bool(r.get("ok")),
+            )
+        if op == "tap_label":
+            label = str(action.params.get("label") or "")
+            r = await ui_tap_label(label)
+            if r.get("ok"):
+                return f"[UI] getippt: {r.get('label')} @{r.get('x')},{r.get('y')}", True
+            return f"[UI] tippe fehlgeschlagen: {r.get('error')}", False
+        if op == "text":
+            text = str(action.params.get("text") or "")
+            r = await input_text(text)
+            return f"[UI] text ({r.get('len')} Zeichen) ok={r.get('ok')}", bool(r.get("ok"))
+        if op == "key":
+            key = action.params.get("key") or "back"
+            r = await input_key(key)
+            return f"[UI] key {key} ok={r.get('ok')}", bool(r.get("ok"))
+        return f"[UI] Unbekannte Input-Op: {op}", False
+    except Exception as exc:
+        return f"[UI] Input Fehler: {exc}", False
+
+
 async def _apps_status(action: OwnerAction) -> tuple[str, bool]:
     """Diagnose Android app launch path (Termux bridge)."""
     lines = ["[Apps / Android-Brücke]"]
@@ -2677,14 +2882,30 @@ async def _app_open(action: OwnerAction) -> tuple[str, bool]:
     if not package and re.match(r"^[\w.]+$", name) and name.count(".") >= 1:
         package = name  # raw package id
 
+    suggestions: list[str] = []
+    if not package:
+        try:
+            from android_apps import resolve_package
+
+            resolved = await resolve_package(name)
+            if resolved.get("ok"):
+                package = str(resolved.get("package") or "")
+                suggestions = list(resolved.get("suggestions") or [])
+        except Exception as exc:
+            log.debug("resolve_package: %s", exc)
+
     if package:
         launch = await _launch_android_package(package, url=url, label=name)
         if launch.get("ok"):
             extra = f"\nURL: {url}" if url else ""
+            hint_more = ""
+            if suggestions and len(suggestions) > 1:
+                hint_more = f"\n(weitere Treffer: {', '.join(suggestions[1:4])})"
             return (
                 f"[Owner] Android-App geöffnet: {name} ({package}) "
-                f"via {launch.get('via')}{extra}\n"
-                f"(Echte App — deine Chrome-Session gilt, falls Chrome.)",
+                f"via {launch.get('via')}{extra}"
+                f"{hint_more}\n"
+                f"(Echte App — Sessions der App gelten.)",
                 True,
             )
         attempts = "; ".join(launch.get("attempts") or [])[:300]
@@ -2704,7 +2925,7 @@ async def _app_open(action: OwnerAction) -> tuple[str, bool]:
     return (
         f"[Owner] Unbekannte App: {name}\n"
         f"Bekannt u. a.: {', '.join(sorted(_APP_PACKAGES)[:12])}…\n"
-        f"Oder: öffne die app com.android.chrome",
+        f"Oder: apps list | öffne app com.android.chrome | suche app whatsapp",
         False,
     )
 

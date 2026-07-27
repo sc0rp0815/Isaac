@@ -120,18 +120,52 @@ starte chrome
 `öffne chrome` startet **com.android.chrome** (Android), nicht Playwright.  
 Playwright bleibt für Web-Tests/Automation.
 
-### Chrome-Tabs lesen (Magisk + Termux-Brücke)
+### Chrome-Tabs + Secrets (Magisk + Termux-Brücke)
 
 ```text
 chrome tabs
 chrome tabs full
 öffne tab 3
+chrome secrets
+chrome cookies
+chrome autofill
+chrome accounts
+chrome passwords
+chrome secrets dump
 ```
 
-Liest **Browser-Tab-URLs** aus Chrome-Tab-Dateien auf dem Gerät (`su`).  
-Keine Cookies, keine Passwörter — nur URL-Strings (Tokens in Query werden redigiert).  
-Voraussetzung: Magisk-Root über die Termux-Brücke.  
-`öffne tab N` öffnet den zuletzt gelisteten Tab in Android-Chrome.
+| Befehl | Inhalt |
+|--------|--------|
+| `chrome tabs` | offene Tab-URLs |
+| `chrome secrets` | Cookies-Katalog + Autofill + Karten + Accounts + PWM-Status |
+| `chrome cookies` | nur Cookie-Hosts/Namen (Werte: v10-encrypted) |
+| `chrome autofill` | Formular-Historie (Klartext wo verfügbar) |
+| `chrome passwords` | Status Google Password Manager (lokal meist nur Hashes) |
+
+**Grenzen (ehrlich):** Cookie-*Werte* und Login-Passwörter sind auf modernem Chrome Android
+über Keystore/Cloud geschützt — Katalog, Autofill, maskierte Karten und Accounts sind lesbar.
+`chrome secrets dump` speichert Roh-DBs unter `data/chrome_secrets_dump/` (Owner only).
+
+### Alle Android-Apps steuern
+
+```text
+apps list
+apps list whatsapp
+suche app n26
+öffne app whatsapp
+öffne de.number26.android
+stop app whatsapp
+activity
+ui dump
+tippe Anmelden
+tippe 500 800
+text hallo
+key back
+back
+```
+
+Package-Suche über `pm list packages` (nicht nur die hardcodierte Alias-Liste).  
+UI über `uiautomator` + `input tap/text/keyevent`.
 
 ### Professionelle Tools
 
