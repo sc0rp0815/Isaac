@@ -127,7 +127,18 @@ class AuditLog:
 
     @classmethod
     def isaac_output(cls, text: str, task_id: str = ""):
-        cls._record("isaac_output", {"text": text[:500], "task_id": task_id})
+        raw = text or ""
+        # Keep a short preview for dense dashboards AND enough full text to
+        # recover the last answer for owner follow-ups (was 500 — too short).
+        cls._record(
+            "isaac_output",
+            {
+                "text": raw[:4000],
+                "text_preview": raw[:500],
+                "text_len": len(raw),
+                "task_id": task_id,
+            },
+        )
 
     @classmethod
     def memory_write(cls, caller: str, typ: str, key: str):

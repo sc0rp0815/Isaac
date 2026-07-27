@@ -104,16 +104,112 @@ def detect_self_model_fact_contradictions(memory: Any = None) -> list[dict[str, 
     return get_self_model().detect_fact_contradictions(memory=memory)
 
 
+_SELF_QUERY_MARKERS = (
+    "du selbst",
+    "dich selbst",
+    "verbesser",
+    "selbstmodell",
+    "self model",
+    "wer bist du",
+    "was bist du",
+    "dein erbauer",
+    "deine stärken",
+    "deine schwächen",
+    "über dich",
+    "dein system",
+    "architektur",
+    "reife",
+    "maturity",
+)
+
+
+def _is_self_referential_query(text: str) -> bool:
+    low = (text or "").lower()
+    return any(m in low for m in _SELF_QUERY_MARKERS)
+
+
 def enrich_retrieval_with_self_model(
     retrieval_ctx: dict[str, Any],
     memory: Any = None,
+    *,
+    user_input: str = "",
 ) -> dict[str, Any]:
     from self_model import get_self_model
 
     sm = get_self_model()
     prefs = sm.relevant_preferences(limit=4)
     contradictions = sm.detect_fact_contradictions(memory=memory)
-    if not prefs and not contradictions:
+    self_query = _is_self_referential_query(user_input)
+    # Always inject a compact self snapshot for self-referential owner questions
+    # (fixes coverage=2.0 on "where would you improve yourself?" when facts=0).
+    snapshot: list[dict[str, Any]] = []
+    if self_query:
+        try:
+            data = {}
+            if hasattr(sm, "snapshot"):
+                data = sm.snapshot() or {}
+            elif hasattr(sm, "data"):
+                data = sm.data or {}
+            ident = (data.get("identity_core") or {}) if isinstance(data, dict) else {}
+            dev = (data.get("development_state") or {}) if isinstance(data, dict) else {}
+            rel = (data.get("relationship_state") or {}) if isinstance(data, dict) else {}
+            epi = (data.get("epistemic_state") or {}) if isinstance(data, dict) else {}
+            if ident:
+                snapshot.append({
+                    "key": "self_identity",
+                    "value": (
+                        f"name={ident.get('name')}; role={ident.get('role')}; "
+                        f"owner={ident.get('owner')}"
+                    ),
+                    "source": "self_model",
+                })
+            if dev:
+                snapshot.append({
+                    "key": "self_development",
+                    "value": (
+                        f"phase={dev.get('phase')}; maturity={dev.get('maturity')}; "
+                        f"milestones={','.join(dev.get('milestones') or [])}"
+                    ),
+                    "source": "self_model",
+                })
+            if rel:
+                snapshot.append({
+                    "key": "self_relationship",
+                    "value": (
+                        f"owner_trust={rel.get('owner_trust')}; "
+                        f"style={rel.get('interaction_style')}"
+                    ),
+                    "source": "self_model",
+                })
+            # Surface architecture constraints as operational "facts"
+            snapshot.append({
+                "key": "self_architecture",
+                "value": (
+                    "pipeline=classify→retrieve→strategy→task→execute→evaluate→memory; "
+                    "executor_does_not_reclassify; normal_chat_no_opportunistic_tools; "
+                    "external_memory=mem0/letta/cognee_bounded; "
+                    "canonical_repo=sc0rp0815/Isaac"
+                ),
+                "source": "self_model",
+            })
+            known = list(epi.get("known_facts") or [])[:4]
+            for fact in known:
+                if isinstance(fact, dict):
+                    snapshot.append({
+                        "key": f"self_fact_{fact.get('key') or 'x'}",
+                        "value": str(fact.get("value") or fact)[:240],
+                        "source": "self_model",
+                    })
+                elif fact:
+                    snapshot.append({
+                        "key": "self_fact",
+                        "value": str(fact)[:240],
+                        "source": "self_model",
+                    })
+        except Exception as exc:
+            log.debug("self_model snapshot failed: %s", exc)
+
+    if not prefs and not contradictions and not snapshot:
         return retrieval_ctx
     merged = dict(retrieval_ctx)
     if prefs:
@@ -127,6 +223,12 @@ def enrich_retrieval_with_self_model(
             })
         merged["preferences_context"] = existing[:6]
         merged["self_model_preferences"] = prefs
+    if snapshot:
+        facts = list(merged.get("relevant_facts") or [])
+        for row in snapshot:
+            facts.append(row)
+        merged["relevant_facts"] = facts[:16]
+        merged["self_model_snapshot"] = snapshot
     if contradictions:
         merged["self_model_contradictions"] = contradictions
         merged["risk_flags"] = list(dict.fromkeys(

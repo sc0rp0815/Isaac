@@ -269,6 +269,8 @@ class Task:
             "dauer":         round(self.dauer_sek, 2),
             "progress":      round(self.progress, 3),
             "antwort_kurz":  self.antwort[:200] if self.antwort else "",
+            # Full answer for monitor recovery (capped to keep WS payloads bounded)
+            "antwort":       (self.antwort or "")[:12000],
             "fehler":        self.fehler[:100] if self.fehler else "",
             "log":           self.log_entries[-10:],
             "used_tools":    self.used_tools[-8:],

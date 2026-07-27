@@ -3509,7 +3509,11 @@ class IsaacKernel:
             interaction_class=interaction_class,
             n_history=n_hist,
         ).as_dict()
-        return enrich_retrieval_with_self_model(retrieval_ctx)
+        return enrich_retrieval_with_self_model(
+            retrieval_ctx,
+            memory=self.memory,
+            user_input=user_input,
+        )
 
     def _select_response_strategy(
         self, user_input: str, intent: str, interaction_class: str, retrieval_ctx: dict[str, Any]
@@ -3543,6 +3547,24 @@ class IsaacKernel:
             tl = (user_input or "").lower().strip()
             if tl.startswith(("github:", "gh:", "fetch:", "web_fetch:", "web fetch:")):
                 allow_tools = True
+            # Self-improvement questions: force concrete system coverage
+            if any(
+                m in tl
+                for m in (
+                    "verbesser",
+                    "dich selbst",
+                    "du selbst",
+                    "selbstmodell",
+                    "stärken",
+                    "schwächen",
+                )
+            ):
+                style_note += (
+                    "\n[Selbstreflexion] Antworte mit: (1) Stärken, (2) konkrete "
+                    "System-/Code-Lücken, (3) priorisierte nächste Schritte. "
+                    "Nutze Self-Model/Pipeline-Fakten aus dem Kontext. "
+                    "Keine erfundenen Trainingsdetails."
+                )
         if "tool_overreach_risk" in risk_tags and intent == Intent.CHAT:
             allow_tools = False
         if "no auto-agreement" in pref_text or "kein auto agreement" in pref_text:
