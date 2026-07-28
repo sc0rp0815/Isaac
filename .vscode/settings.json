@@ -1,0 +1,86 @@
+{
+  "python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python",
+  "python.terminal.activateEnvironment": true,
+  "python.analysis.extraPaths": [
+    "${workspaceFolder}"
+  ],
+  "python.analysis.exclude": [
+    "**/__pycache__",
+    "**/.venv",
+    "**/mychromadb_env",
+    "**/web/node_modules",
+    "**/data",
+    "**/logs",
+    "**/workspace",
+    "**/traces"
+  ],
+  "python.testing.unittestEnabled": true,
+  "python.testing.pytestEnabled": false,
+  "python.testing.cwd": "${workspaceFolder}",
+  "python.testing.unittestArgs": [
+    "-v",
+    "-s",
+    ".",
+    "-p",
+    "tests_*.py"
+  ],
+  "editor.formatOnSave": true,
+  "editor.rulers": [100],
+  "files.eol": "\n",
+  "files.trimTrailingWhitespace": true,
+  "files.insertFinalNewline": true,
+  "files.exclude": {
+    "**/__pycache__": true,
+    "**/*.pyc": true,
+    "**/.pytest_cache": true,
+    "**/mychromadb_env": true
+  },
+  "files.watcherExclude": {
+    "**/.git/objects/**": true,
+    "**/.venv/**": true,
+    "**/mychromadb_env/**": true,
+    "**/web/node_modules/**": true,
+    "**/data/**": true,
+    "**/logs/**": true,
+    "**/workspace/**": true,
+    "**/traces/**": true
+  },
+  "search.exclude": {
+    "**/.venv": true,
+    "**/mychromadb_env": true,
+    "**/web/node_modules": true,
+    "**/data": true,
+    "**/logs": true,
+    "**/__pycache__": true,
+    "**/package": true
+  },
+  "files.associations": {
+    "AGENTS.md": "markdown",
+    "AGENT.md": "markdown",
+    "*.env.local": "dotenv",
+    "*.env.example": "dotenv"
+  },
+  "[python]": {
+    "editor.tabSize": 4,
+    "editor.insertSpaces": true,
+    "editor.defaultFormatter": "ms-python.python"
+  },
+  "[markdown]": {
+    "editor.wordWrap": "on"
+  },
+  "[json]": {
+    "editor.tabSize": 2
+  },
+  "terminal.integrated.env.linux": {
+    "ISAAC_DISABLE_VECTOR_MEMORY": "1",
+    "PYTHONPATH": "${workspaceFolder}"
+  },
+  "terminal.integrated.cwd": "${workspaceFolder}",
+  "git.ignoreLimitWarning": true,
+  "explorer.fileNesting.enabled": true,
+  "explorer.fileNesting.patterns": {
+    "isaac_core.py": "isaac_*.py, run_isaac.sh, start_isaac.sh, stop_isaac.sh",
+    "AGENTS.md": "AGENT.md, README.md",
+    "requirements.txt": "requirements-*.txt, pytest.ini"
+  }
+}

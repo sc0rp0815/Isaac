@@ -1,0 +1,35 @@
+{
+  "folders": [
+    {
+      "name": "Isaac Kernel",
+      "path": "."
+    },
+    {
+      "name": "Docs",
+      "path": "docs"
+    },
+    {
+      "name": "Web (optional)",
+      "path": "web"
+    }
+  ],
+  "settings": {
+    "python.defaultInterpreterPath": "${workspaceFolder:Isaac Kernel}/.venv/bin/python",
+    "files.exclude": {
+      "**/__pycache__": true,
+      "**/mychromadb_env": true
+    }
+  },
+  "extensions": {
+    "recommendations": [
+      "ms-python.python",
+      "ms-python.vscode-pylance",
+      "ms-python.debugpy",
+      "mikestead.dotenv"
+    ]
+  },
+  "launch": {
+    "version": "0.2.0",
+    "configurations": []
+  }
+}

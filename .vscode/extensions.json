@@ -1,0 +1,17 @@
+{
+  "recommendations": [
+    "ms-python.python",
+    "ms-python.vscode-pylance",
+    "ms-python.debugpy",
+    "ms-azuretools.vscode-docker",
+    "mikestead.dotenv",
+    "redhat.vscode-yaml",
+    "tamasfe.even-better-toml",
+    "streetsidesoftware.code-spell-checker",
+    "eamodio.gitlens",
+    "charliermarsh.ruff"
+  ],
+  "unwantedRecommendations": [
+    "ms-python.black-formatter"
+  ]
+}

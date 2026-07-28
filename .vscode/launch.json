@@ -1,0 +1,76 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Isaac Core",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/isaac_core.py",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": true,
+      "env": {
+        "ISAAC_DISABLE_VECTOR_MEMORY": "1",
+        "PYTHONPATH": "${workspaceFolder}",
+        "PYTHONUNBUFFERED": "1"
+      }
+    },
+    {
+      "name": "Isaac: current file",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${file}",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": true,
+      "env": {
+        "ISAAC_DISABLE_VECTOR_MEMORY": "1",
+        "PYTHONPATH": "${workspaceFolder}"
+      }
+    },
+    {
+      "name": "Unittest: phase_a_stabilization",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "unittest",
+      "args": [
+        "tests_phase_a_stabilization",
+        "-v"
+      ],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "env": {
+        "ISAAC_DISABLE_VECTOR_MEMORY": "1",
+        "PYTHONPATH": "${workspaceFolder}"
+      }
+    },
+    {
+      "name": "Unittest: context7",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "unittest",
+      "args": [
+        "tests_context7_adapter",
+        "-v"
+      ],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "env": {
+        "ISAAC_DISABLE_VECTOR_MEMORY": "1",
+        "PYTHONPATH": "${workspaceFolder}"
+      }
+    },
+    {
+      "name": "Sanity check",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/sanity_check.py",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "env": {
+        "ISAAC_DISABLE_VECTOR_MEMORY": "1",
+        "PYTHONPATH": "${workspaceFolder}"
+      }
+    }
+  ]
+}

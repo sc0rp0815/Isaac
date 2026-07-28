@@ -1,0 +1,80 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Isaac: py_compile core",
+      "type": "shell",
+      "command": "python3 -m py_compile isaac_core.py executor.py low_complexity.py memory.py relay.py logic.py",
+      "options": {
+        "cwd": "${workspaceFolder}",
+        "env": {
+          "PYTHONPATH": "${workspaceFolder}"
+        }
+      },
+      "group": "build",
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "Isaac: sanity_check",
+      "type": "shell",
+      "command": "${workspaceFolder}/.venv/bin/python sanity_check.py || python3 sanity_check.py",
+      "options": {
+        "cwd": "${workspaceFolder}",
+        "env": {
+          "ISAAC_DISABLE_VECTOR_MEMORY": "1",
+          "PYTHONPATH": "${workspaceFolder}"
+        }
+      },
+      "group": "test"
+    },
+    {
+      "label": "Isaac: unittest core modules",
+      "type": "shell",
+      "command": "ISAAC_DISABLE_VECTOR_MEMORY=1 python3 -m unittest tests_phase_a_stabilization tests_state_io tests_provider_configuration -v",
+      "options": {
+        "cwd": "${workspaceFolder}",
+        "env": {
+          "ISAAC_DISABLE_VECTOR_MEMORY": "1",
+          "PYTHONPATH": "${workspaceFolder}"
+        }
+      },
+      "group": {
+        "kind": "test",
+        "isDefault": true
+      }
+    },
+    {
+      "label": "Isaac: start (background)",
+      "type": "shell",
+      "command": "ISAAC_DISABLE_VECTOR_MEMORY=1 python3 isaac_core.py",
+      "isBackground": true,
+      "options": {
+        "cwd": "${workspaceFolder}",
+        "env": {
+          "ISAAC_DISABLE_VECTOR_MEMORY": "1",
+          "PYTHONPATH": "${workspaceFolder}",
+          "PYTHONUNBUFFERED": "1"
+        }
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Isaac: healthz",
+      "type": "shell",
+      "command": "curl -sS -m 5 http://127.0.0.1:8766/healthz || curl -sS -m 5 http://127.0.0.1:8766/health || echo 'Isaac not reachable on :8766'",
+      "problemMatcher": []
+    },
+    {
+      "label": "Isaac: deploy sync check",
+      "type": "shell",
+      "command": "python3 scripts/check_deploy_sync.py",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    }
+  ]
+}
