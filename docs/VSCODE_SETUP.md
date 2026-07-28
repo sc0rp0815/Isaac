@@ -61,3 +61,24 @@ Fokus-Dateien: `isaac_core.py`, `executor.py`, `low_complexity.py`, `memory.py`,
 ---
 
 *Isaac Kernel · VS Code Workspace*
+
+
+## code-server auf dem S8 (installiert)
+
+Standalone: `~/.local/bin/code-server` (v4.130.0 arm64).
+
+```bash
+# starten
+bash scripts/start_code_server.sh
+# URL
+#   http://127.0.0.1:8443
+#   http://<LAN-IP>:8443   # z.B. im gleichen WLAN vom PC/Handy
+# Passwort (lokal, gitignored):
+cat data/cli_auth_backup/code_server_password.txt
+# Log
+tail -f logs/code-server.log
+```
+
+Config: `~/.config/code-server/config.yaml` (`bind-addr: 0.0.0.0:8443`).
+
+**RAM:** code-server ist speicherhungrig — bei Engpass Isaac stoppen oder nur PC-VS-Code nutzen.
