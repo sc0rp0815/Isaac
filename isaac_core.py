@@ -101,6 +101,7 @@ class Intent:
     OPEN_INTERPRETER = "open_interpreter"  # Explizit: Open Interpreter Companion
     GROK_AGENT  = "grok_agent"      # Explizit: Grok Build Agent CLI (headless)
     COPILOT_AGENT = "copilot_agent"  # Explizit: GitHub Copilot CLI / cloud agent
+    CONTEXT7    = "context7"        # Explizit: Context7 Library-Docs (docs:)
     REMOTE_CLOUD = "remote_cloud"    # Explizit: remote Isaac (Render free) cloud:
     REMOTE_BOTH  = "remote_both"     # Explizit: lokal + remote both:
     EXT_MEMORY  = "ext_memory"      # Status: external memory adapters
@@ -194,6 +195,14 @@ EXPLICIT_COMMAND_PATTERNS = [
         r"^copilot-agent\s*:",
         r"^copilot agent\s*:",
     ]),
+    (Intent.CONTEXT7, [
+        r"^docs\s*:",
+        r"^context7\s*:",
+        r"^ctx7\s*:",
+        r"^doku\s*:",
+        r"^library docs\s*:",
+        r"^lib docs\s*:",
+    ]),
     (Intent.REMOTE_CLOUD, [
         r"^cloud\s*:",
         r"^free\s*:",
@@ -214,6 +223,9 @@ EXPLICIT_COMMAND_PATTERNS = [
         r"^mem0 status$",
         r"^cognee status$",
         r"^letta status$",
+        r"^context7 status$",
+        r"^ctx7 status$",
+        r"^docs status$",
         r"^oi status$",
         r"^open-interpreter status$",
         r"^open interpreter status$",
@@ -575,6 +587,7 @@ class IsaacKernel:
             Intent.OPEN_INTERPRETER: self._handle_open_interpreter,
             Intent.GROK_AGENT: self._handle_grok_agent,
             Intent.COPILOT_AGENT: self._handle_copilot_agent,
+            Intent.CONTEXT7:   self._handle_context7,
             Intent.REMOTE_CLOUD: self._handle_remote_cloud,
             Intent.REMOTE_BOTH: self._handle_remote_both,
         }
@@ -2618,6 +2631,79 @@ class IsaacKernel:
         except Exception as exc:
             return f"[Remote Smoke] full fehlgeschlagen: {exc}"
 
+    def _handle_context7(self, text: str) -> str:
+        """Explicit Context7 library docs: 'docs: …' / 'context7: …' / 'ctx7: …'."""
+        prompt = text
+        for prefix in (
+            "docs:",
+            "context7:",
+            "ctx7:",
+            "doku:",
+            "library docs:",
+            "lib docs:",
+        ):
+            low = text.lower()
+            idx = low.find(prefix)
+            if idx >= 0:
+                prompt = text[idx + len(prefix) :].strip()
+                break
+        if not prompt or prompt.lower() in {"status", "hilfe", "help", "?"}:
+            if prompt and prompt.lower() == "status":
+                try:
+                    from external_memory import get_external_memory_bridge
+
+                    st = get_external_memory_bridge().context7.status()
+                    return (
+                        "[Context7 Status]\n"
+                        + "\n".join(f"{k}={v}" for k, v in st.items())
+                    )
+                except Exception as exc:
+                    return f"[Context7] Status fehlgeschlagen: {exc}"
+            return (
+                "[Context7] Format:\n"
+                "  docs: fastapi | APIRouter prefix\n"
+                "  docs: /vercel/next.js middleware auth\n"
+                "  docs: react useState\n"
+                "  context7 status\n"
+                "Aliases: context7: | ctx7: | doku:\n"
+                "Env: CONTEXT7_API_KEY + ISAAC_CONTEXT7_ENABLED=1\n"
+                "Docs: docs/CONTEXT7.md"
+            )
+        try:
+            from external_memory import get_external_memory_bridge
+            from privilege import steffen_ctx
+
+            bridge = get_external_memory_bridge()
+            if not bridge.cfg.context7_enabled:
+                return (
+                    "[Context7] Deaktiviert. Setze ISAAC_CONTEXT7_ENABLED=1 "
+                    "und CONTEXT7_API_KEY=ctx7sk-…"
+                )
+            try:
+                ok, reason = self.gate.authorize(
+                    "chat_response",
+                    steffen_ctx("Context7 docs lookup"),
+                )
+                if not ok:
+                    return f"[Context7] Privilege verweigert: {reason}"
+            except Exception:
+                pass
+
+            result = bridge.context7.lookup(prompt)
+            if not result.get("ok"):
+                err = result.get("error") or "unbekannt"
+                return f"[Context7] Fehler: {err}"
+            lib = result.get("library_id") or "?"
+            title = result.get("library_title") or ""
+            head = f"[Context7 | {lib}"
+            if title:
+                head += f" · {title}"
+            head += "]"
+            body = (result.get("text") or "").strip() or "(keine Ausgabe)"
+            return f"{head}\n{body[:5000]}"
+        except Exception as exc:
+            return f"[Context7] Fehler: {exc}"
+
     def _handle_letta(self, text: str) -> str:
         """Explicit Letta Code companion run: 'letta: …' / 'coding-agent: …'."""
         prompt = text
@@ -3380,6 +3466,14 @@ class IsaacKernel:
                 "copilot-agent:",
                 "copilot agent:",
             ),
+            Intent.CONTEXT7: (
+                "docs:",
+                "context7:",
+                "ctx7:",
+                "doku:",
+                "library docs:",
+                "lib docs:",
+            ),
             Intent.REMOTE_CLOUD: (
                 "cloud:",
                 "free:",
@@ -3400,6 +3494,9 @@ class IsaacKernel:
                 "mem0 status",
                 "cognee status",
                 "letta status",
+                "context7 status",
+                "ctx7 status",
+                "docs status",
                 "oi status",
                 "open-interpreter status",
                 "open interpreter status",

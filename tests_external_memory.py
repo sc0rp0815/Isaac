@@ -11,16 +11,33 @@ from unittest.mock import MagicMock, patch
 
 class TestExternalMemoryConfig(unittest.TestCase):
     def test_adapters_disabled_by_default(self):
-        # Clear relevant env
+        # Clear relevant env (incl. auto-enable keys)
         keys = [
             "ISAAC_MEM0_ENABLED",
             "ISAAC_COGNEE_ENABLED",
             "ISAAC_LETTA_ENABLED",
             "ISAAC_OPEN_INTERPRETER_ENABLED",
             "ISAAC_GROK_AGENT_ENABLED",
+            "ISAAC_COPILOT_AGENT_ENABLED",
+            "ISAAC_CONTEXT7_ENABLED",
             "ISAAC_EXTERNAL_MEMORY_WRITE",
+            "MEM0_API_KEY",
+            "ISAAC_MEM0_API_KEY",
+            "CONTEXT7_API_KEY",
+            "ISAAC_CONTEXT7_API_KEY",
+            "LETTA_API_KEY",
         ]
-        with patch.dict(os.environ, {k: "0" for k in keys}, clear=False):
+        env = {k: "0" for k in keys if k.startswith("ISAAC_")}
+        env.update(
+            {
+                "MEM0_API_KEY": "",
+                "ISAAC_MEM0_API_KEY": "",
+                "CONTEXT7_API_KEY": "",
+                "ISAAC_CONTEXT7_API_KEY": "",
+                "LETTA_API_KEY": "",
+            }
+        )
+        with patch.dict(os.environ, env, clear=False):
             from external_memory import (
                 load_external_memory_config,
                 reset_external_memory_bridge,
@@ -34,6 +51,7 @@ class TestExternalMemoryConfig(unittest.TestCase):
             self.assertFalse(cfg.letta_enabled)
             self.assertFalse(cfg.open_interpreter_enabled)
             self.assertFalse(cfg.grok_agent_enabled)
+            self.assertFalse(cfg.context7_enabled)
             self.assertFalse(cfg.write_enabled)
             bridge = get_external_memory_bridge(reset=True)
             self.assertFalse(bridge.any_enabled())
@@ -66,6 +84,7 @@ class TestExternalMemoryFailSoft(unittest.TestCase):
             self.assertIn("letta", st["adapters"])
             self.assertIn("open_interpreter", st["adapters"])
             self.assertIn("grok_agent", st["adapters"])
+            self.assertIn("context7", st["adapters"])
 
     def test_remember_turn_respects_min_score(self):
         env = {

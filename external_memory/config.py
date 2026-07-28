@@ -44,6 +44,7 @@ class ExternalMemoryConfig:
     open_interpreter_enabled: bool = False
     grok_agent_enabled: bool = False
     copilot_agent_enabled: bool = False
+    context7_enabled: bool = False
     write_enabled: bool = False
     min_score: float = 5.0
     search_timeout_s: float = 2.5
@@ -56,6 +57,10 @@ class ExternalMemoryConfig:
     mem0_allow_cloud: bool = False
     mem0_api_key: str = ""
     mem0_base_url: str = "https://api.mem0.ai"
+    context7_api_key: str = ""
+    context7_base_url: str = "https://context7.com"
+    context7_timeout_s: float = 20.0
+    context7_max_snippets: int = 6
     cognee_allow_cloud: bool = False
     letta_allow_cloud: bool = False
     cognee_base_url: str = ""
@@ -113,6 +118,7 @@ class ExternalMemoryConfig:
             or self.open_interpreter_enabled
             or self.grok_agent_enabled
             or self.copilot_agent_enabled
+            or self.context7_enabled
         )
 
 
@@ -130,10 +136,15 @@ def load_external_memory_config() -> ExternalMemoryConfig:
     mem0_api_key = (
         os.getenv("MEM0_API_KEY") or os.getenv("ISAAC_MEM0_API_KEY") or ""
     ).strip()
+    context7_api_key = (
+        os.getenv("CONTEXT7_API_KEY") or os.getenv("ISAAC_CONTEXT7_API_KEY") or ""
+    ).strip()
     # Auto-enable platform path when API key present (unless explicitly disabled)
     mem0_key_present = bool(mem0_api_key)
     mem0_enabled = _env_bool("ISAAC_MEM0_ENABLED", mem0_key_present)
     mem0_allow_cloud = _env_bool("ISAAC_MEM0_ALLOW_CLOUD", mem0_key_present)
+    context7_key_present = bool(context7_api_key)
+    context7_enabled = _env_bool("ISAAC_CONTEXT7_ENABLED", context7_key_present)
     # Writes: on by default when platform key is configured
     write_enabled = _env_bool(
         "ISAAC_EXTERNAL_MEMORY_WRITE",
@@ -146,6 +157,7 @@ def load_external_memory_config() -> ExternalMemoryConfig:
         open_interpreter_enabled=_env_bool("ISAAC_OPEN_INTERPRETER_ENABLED", False),
         grok_agent_enabled=_env_bool("ISAAC_GROK_AGENT_ENABLED", False),
         copilot_agent_enabled=_env_bool("ISAAC_COPILOT_AGENT_ENABLED", False),
+        context7_enabled=context7_enabled,
         write_enabled=write_enabled,
         min_score=_env_float("ISAAC_EXTERNAL_MEMORY_MIN_SCORE", 5.0),
         search_timeout_s=max(
@@ -168,6 +180,19 @@ def load_external_memory_config() -> ExternalMemoryConfig:
             or "https://api.mem0.ai"
         ).strip().rstrip("/")
         or "https://api.mem0.ai",
+        context7_api_key=context7_api_key,
+        context7_base_url=(
+            os.getenv("CONTEXT7_BASE_URL")
+            or os.getenv("ISAAC_CONTEXT7_BASE_URL")
+            or "https://context7.com"
+        ).strip().rstrip("/")
+        or "https://context7.com",
+        context7_timeout_s=max(
+            3.0, min(60.0, _env_float("ISAAC_CONTEXT7_TIMEOUT", 20.0))
+        ),
+        context7_max_snippets=max(
+            1, min(12, _env_int("ISAAC_CONTEXT7_MAX_SNIPPETS", 6))
+        ),
         cognee_allow_cloud=_env_bool("ISAAC_COGNEE_ALLOW_CLOUD", False),
         letta_allow_cloud=_env_bool("ISAAC_LETTA_ALLOW_CLOUD", False),
         cognee_base_url=(
