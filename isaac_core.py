@@ -526,6 +526,26 @@ class IsaacKernel:
             intent = Intent.BROWSER
         timing["routing_prep_ms"] = round((time.perf_counter() - t_start) * 1000, 2)
 
+        # Owner confirm resume: "Ich bestätige" → pending browser mission
+        pending_browser_cmd = ""
+        try:
+            from execution_contract import (
+                is_owner_confirm,
+                load_pending_browser_mission,
+            )
+
+            if is_owner_confirm(user_input):
+                pending = load_pending_browser_mission()
+                if pending and (pending.get("command") or "").strip():
+                    pending_browser_cmd = str(pending["command"]).strip()
+                    intent = Intent.BROWSER
+                    log.info(
+                        "Owner confirm resumes pending browser: %s",
+                        pending_browser_cmd[:80],
+                    )
+        except Exception as exc:
+            log.debug("pending browser confirm check: %s", exc)
+
         # Dashboard NOW (fail-open telemetry only)
         try:
             from monitor_now import set_now_phase
@@ -565,8 +585,31 @@ class IsaacKernel:
             return self._post_process(user_input, result, emp, 0.0, t0)
 
         if intent == Intent.BROWSER or self._is_browser_request(user_input):
-            result = await self._handle_browser_request(user_input)
+            browser_text = pending_browser_cmd or user_input
+            if pending_browser_cmd:
+                try:
+                    from execution_contract import clear_pending_browser_mission
+
+                    clear_pending_browser_mission()
+                except Exception:
+                    pass
+            result = await self._handle_browser_request(browser_text)
             return self._post_process(user_input, result, emp, 0.0, t0)
+
+        # Confirm without pending mission — honest short reply (no LLM theater)
+        try:
+            from execution_contract import is_owner_confirm
+
+            if is_owner_confirm(user_input):
+                msg = (
+                    "[Browser] Keine ausstehende Mission zum Bestätigen.\n"
+                    "Starte explizit, z. B.:\n"
+                    "  browser: https://example.com\n"
+                    "  öffne revolut und hole api keys"
+                )
+                return self._post_process(user_input, msg, emp, 6.0, t0)
+        except Exception:
+            pass
 
         # Direkte Handler (kein Task nötig)
         direkt = {
@@ -2044,6 +2087,63 @@ class IsaacKernel:
             "actions": actions,
         }
 
+    async def _run_browser_flow_bounded(
+        self,
+        browser,
+        instance_id: str,
+        start_url: str,
+        actions: list,
+        *,
+        name: str = "",
+        timeout_s: float = 90.0,
+    ) -> dict:
+        """Run browser.run_flow with a hard timeout; never hang the kernel forever."""
+        timeout_s = max(0.05, min(180.0, float(timeout_s)))
+        try:
+            result = await asyncio.wait_for(
+                browser.run_flow(
+                    instance_id,
+                    start_url,
+                    actions,
+                    name=name or instance_id,
+                ),
+                timeout=timeout_s,
+            )
+            if isinstance(result, dict):
+                return result
+            return {"ok": False, "error": "browser_flow_invalid_result"}
+        except asyncio.TimeoutError:
+            try:
+                from audit import AuditLog
+
+                AuditLog.action(
+                    "Browser",
+                    "flow_timeout",
+                    f"url={start_url[:120]} timeout={int(timeout_s)}s",
+                    erfolg=False,
+                )
+            except Exception:
+                pass
+            log.warning(
+                "Browser flow timeout after %ss url=%s",
+                int(timeout_s),
+                (start_url or "")[:100],
+            )
+            return {
+                "ok": False,
+                "error": f"browser_timeout_{int(timeout_s)}s",
+                "current_url": start_url,
+                "steps": [],
+            }
+        except Exception as exc:
+            log.warning("Browser flow failed: %s", exc)
+            return {
+                "ok": False,
+                "error": str(exc)[:300],
+                "current_url": start_url,
+                "steps": [],
+            }
+
     async def _handle_browser_request(self, text: str) -> str:
         from browser import get_browser
 
@@ -2145,6 +2245,13 @@ class IsaacKernel:
 
         simple = self._parse_simple_browser_request(text)
         if simple:
+            # Real execution path — drop any stale pending confirm
+            try:
+                from execution_contract import clear_pending_browser_mission
+
+                clear_pending_browser_mission()
+            except Exception:
+                pass
             # Optional credentials from "Browser: host login: u passwort: p"
             if simple.get("login_user") and simple.get("login_password"):
                 try:
@@ -2180,7 +2287,8 @@ class IsaacKernel:
                     "selector": "body",
                     "save_as": "page_text",
                 })
-            result = await get_browser().run_flow(
+            result = await self._run_browser_flow_bounded(
+                get_browser(),
                 simple["instance_id"],
                 simple["url"],
                 actions,
@@ -2253,7 +2361,8 @@ class IsaacKernel:
                 "„Log dich bei Google ein login: … passwort: …“"
             )
 
-        result = await get_browser().run_flow(
+        result = await self._run_browser_flow_bounded(
+            get_browser(),
             spec["instance_id"],
             spec["url"],
             spec["actions"],

@@ -25,6 +25,7 @@ from audit import AuditLog
 log = logging.getLogger("Isaac.ExecutionContract")
 
 MISSIONS_PATH = DATA_DIR / "execution_missions.json"
+PENDING_BROWSER_PATH = DATA_DIR / "pending_browser_mission.json"
 
 # ── Mission kinds ─────────────────────────────────────────────────────────────
 KIND_BROWSER_NAVIGATE = "browser_navigate"
@@ -46,6 +47,7 @@ KNOWN_TARGETS: dict[str, str] = {
     "yeswehack": "https://yeswehack.com",
     "intigriti": "https://www.intigriti.com",
     "synack": "https://www.synack.com",
+    "revolut": "https://app.revolut.com",
 }
 
 BOUNTY_MARKERS = (
@@ -90,10 +92,10 @@ NAVIGATE_MARKERS = (
     "browser ",
 )
 
-# Phrases that claim tool/browser success without evidence (anti-hallucination)
+# Phrases that claim tool/browser success OR impending action without evidence
 _FAKE_SUCCESS_RE = re.compile(
     r"(?is)\b("
-    r"ich habe (mich )?(erfolgreich )?(eingeloggt|angemeldet|geöffnet|navigiert|besucht)"
+    r"ich habe (mich )?(erfolgreich )?(.{0,40}?)?(eingeloggt|angemeldet|geöffnet|navigiert|besucht)"
     r"|ich bin (jetzt )?(eingeloggt|auf der seite|angemeldet)"
     r"|login (war |erfolgreich|geklappt)"
     r"|seite (ist |wurde )?(geöffnet|geladen|aufgerufen)"
@@ -101,7 +103,26 @@ _FAKE_SUCCESS_RE = re.compile(
     r"|ich habe (die )?aufgabe (erledigt|ausgeführt|abgeschlossen)"
     r"|ich habe (mich )?bei .+ angemeldet"
     r"|successfully (logged in|navigated|opened)"
+    # Future/claim theater (common LLM failure mode)
+    r"|ich starte (die |jetzt die |nun die )?browser"
+    r"|ich starte (jetzt |nun )?(die )?browser[- ]?automation"
+    r"|ich werde (jetzt |nun )?(die )?browser"
+    r"|ich melde mich an und hole"
+    r"|ich (öffne|navigiere) (jetzt |nun )?(den )?browser"
+    r"|browser[- ]?automation[,.]? (melde|starte|hole)"
     r")\b"
+)
+
+# Owner short confirms that should resume a pending browser mission
+_OWNER_CONFIRM_RE = re.compile(
+    r"(?is)^\s*("
+    r"ich bestätige( es)?|bestätigt|bestätigung"
+    r"|ja[,.]?\s*(mach|los|fortfahren|weiter|bitte)"
+    r"|ok[,.]?\s*(mach|los|fortfahren|weiter)?"
+    r"|mach (es|weiter|jetzt)"
+    r"|fortfahren|weiter so|go ahead|do it|confirmed"
+    r"|ja$"
+    r")\s*[.!]?\s*$"
 )
 
 _EVIDENCE_MARKERS = (
@@ -530,6 +551,115 @@ def looks_like_fake_tool_success(text: str) -> bool:
     return bool(_FAKE_SUCCESS_RE.search(text or ""))
 
 
+def is_owner_confirm(text: str) -> bool:
+    """True for short owner confirms that may resume a pending browser mission."""
+    return bool(_OWNER_CONFIRM_RE.match((text or "").strip()))
+
+
+def extract_browser_command_hint(*texts: str) -> str:
+    """Best-effort reconstruct an explicit browser: command from free text."""
+    blob = " ".join(t for t in texts if t).strip()
+    if not blob:
+        return ""
+    # Already explicit
+    low = blob.lower()
+    if low.startswith("browser:") or low.startswith("browser "):
+        return blob if low.startswith("browser:") else ("browser: " + blob.split(None, 1)[-1])
+    # URL present
+    m = re.search(r"https?://[^\s\"'<>]+", blob, re.I)
+    if m:
+        url = m.group(0).rstrip(".,;:)")
+        rest = blob[m.end() :].strip()
+        # Drop theater verbs from rest
+        rest = re.sub(
+            r"(?is)\b(ich starte|browser[- ]?automation|melde mich|danach|brauchst du).*$",
+            "",
+            rest,
+        ).strip()
+        cmd = f"browser: {url}"
+        if rest and len(rest) < 80:
+            cmd = f"{cmd}  {rest}"
+        return cmd
+    # Known nicknames
+    low_full = blob.lower()
+    for nick, url in KNOWN_TARGETS.items():
+        if nick in low_full:
+            extra = ""
+            if "api" in low_full and "key" in low_full.replace("-", ""):
+                extra = " hole API keys"
+            elif "login" in low_full or "anmeld" in low_full:
+                extra = " login"
+            return f"browser: {url}{extra}"
+    return ""
+
+
+def save_pending_browser_mission(
+    command: str,
+    *,
+    source: str = "",
+    title: str = "",
+    ttl_s: float = 1800.0,
+) -> dict[str, Any]:
+    """Persist a browser command for owner confirm resume."""
+    cmd = (command or "").strip()
+    if not cmd:
+        return {}
+    if not cmd.lower().startswith("browser"):
+        cmd = f"browser: {cmd}"
+    payload = {
+        "command": cmd,
+        "title": (title or cmd)[:120],
+        "source": source or "unknown",
+        "created_ts": time.time(),
+        "expires_s": float(ttl_s),
+    }
+    try:
+        DATA_DIR.mkdir(parents=True, exist_ok=True)
+        PENDING_BROWSER_PATH.write_text(
+            json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        AuditLog.action(
+            "ExecutionContract",
+            "pending_browser_saved",
+            f"source={source} cmd={cmd[:100]}",
+            erfolg=True,
+        )
+    except Exception as exc:
+        log.debug("pending browser save failed: %s", exc)
+        return {}
+    return payload
+
+
+def load_pending_browser_mission() -> Optional[dict[str, Any]]:
+    """Load non-expired pending browser mission, or None."""
+    if not PENDING_BROWSER_PATH.exists():
+        return None
+    try:
+        raw = json.loads(PENDING_BROWSER_PATH.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+    if not isinstance(raw, dict):
+        return None
+    cmd = (raw.get("command") or "").strip()
+    if not cmd:
+        return None
+    created = float(raw.get("created_ts") or 0)
+    expires = float(raw.get("expires_s") or 1800)
+    if created and (time.time() - created) > expires:
+        clear_pending_browser_mission()
+        return None
+    return raw
+
+
+def clear_pending_browser_mission() -> None:
+    try:
+        if PENDING_BROWSER_PATH.exists():
+            PENDING_BROWSER_PATH.unlink()
+    except Exception as exc:
+        log.debug("pending browser clear failed: %s", exc)
+
+
 def apply_anti_hallucination(
     user_input: str,
     antwort: str,
@@ -553,12 +683,34 @@ def apply_anti_hallucination(
     action_like = bool(mission) or any(
         m in tl for m in LOGIN_MARKERS + NAVIGATE_MARKERS + BOUNTY_MARKERS
     )
-    if not action_like:
+    # Browser-theater in the model answer itself counts as action-like
+    answer_browser_claim = bool(
+        re.search(
+            r"(?is)browser[- ]?automation|ich starte.*(browser|navigation)|api[- ]?keys?",
+            raw,
+        )
+    )
+    # Try to stash a concrete resume command for owner confirm
+    hint = extract_browser_command_hint(user_input, raw)
+    if hint:
+        save_pending_browser_mission(
+            hint,
+            source="anti_hallucination",
+            title=hint[:80],
+        )
+
+    if not action_like and not answer_browser_claim:
         # Soft scrub: remove fake-success sentences only
         cleaned = _FAKE_SUCCESS_RE.sub(
             "[Hinweis: Kein Tool-Lauf — Erfolg nicht verifiziert]",
             raw,
         )
+        if hint:
+            cleaned += (
+                "\n\n[Pending] Browser-Mission vorgemerkt.\n"
+                f"  Befehl: {hint}\n"
+                "Zum Ausführen: **Ich bestätige**"
+            )
         return cleaned
 
     honest = (
@@ -569,7 +721,11 @@ def apply_anti_hallucination(
         "  • Gehe auf hackerone und arbeite im Hintergrund an autorisierten Programmen\n"
         "  • Log dich bei Google ein login: … passwort: …\n"
     )
-    # Keep any non-success trailing advice if short
+    if hint:
+        honest += (
+            f"\n[Pending] Vorgemerkte Mission:\n  {hint}\n"
+            "Zum echten Start: **Ich bestätige**\n"
+        )
     return honest
 
 

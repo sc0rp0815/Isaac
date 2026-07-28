@@ -357,6 +357,14 @@ class TestCriticalBugs(unittest.TestCase):
         real = "[Browser] ok\n[Evidence]\nok=true\nIch habe navigiert."
         out2 = apply_anti_hallucination("Browser auf google", real, tools_ran=False)
         self.assertIn("[Evidence]", out2)
+        # Future-tense theater also blocked
+        start = "Ich starte die Browser-Automation und hole die API-Keys."
+        out3 = apply_anti_hallucination("hole keys", start, tools_ran=False)
+        self.assertTrue(
+            "Execution Contract" in out3
+            or "Kein Tool-Lauf" in out3
+            or "Pending" in out3
+        )
 
     def test_followup_und_continuity_no_credential_fishing(self):
         """'Und?' must not open key/browser missions; strip noise + style_note."""
