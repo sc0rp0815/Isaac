@@ -1,0 +1,63 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Logs & Runtime
+*.log
+*.out
+*.pid
+monitor.out
+
+# Environment & Secrets
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.p12
+data/
+logs/
+workspace/
+
+# Virtual Environment
+.venv/
+venv/
+
+# Build Artifacts
+*.bak
+*.bak*
+archives/
+archive/
+package/
+
+# Heavy Dependencies (local only)
+whisper.cpp/
+opencode-mobile/
+
+# Compressed Files
+*.zip
+*.tar.gz
+*.tar.bz2
+
+# IDE/Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Test & Dev
+tests_*.py
+test_*.py
+*_test.py
+.pytest_cache/
+.coverage
+htmlcov/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker
+.docker/

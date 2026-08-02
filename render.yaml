@@ -46,19 +46,3 @@ services:
       # Optional: Sentry AI monitoring (Python project DSN)
       - key: SENTRY_DSN
         sync: false
-      - key: SENTRY_TRACES_SAMPLE_RATE
-        value: "1.0"
-      - key: SENTRY_PROFILES_SAMPLE_RATE
-        value: "1.0"
-      - key: SENTRY_ERROR_SAMPLE_RATE
-        value: "1.0"
-      - key: SENTRY_ENVIRONMENT
-        value: production
-      - key: SENTRY_INCLUDE_PROMPTS
-        value: "1"
-      - key: SENTRY_ENABLE_LOGS
-        value: "1"
-      - key: SENTRY_ENABLE_METRICS
-        value: "1"
-      - key: SENTRY_RELEASE
-        value: isaac@5.3

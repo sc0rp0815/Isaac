@@ -32,7 +32,8 @@ ISAAC_FREE_CLOUD=1
 ## Deploy
 
 1. Create a new **Docker** Space on Hugging Face.
-2. Point it at this repo **or** copy `Dockerfile.free` as `Dockerfile` in the Space root.
+2. Point it at this repo **or** copy **`Dockerfile.free`** (not `Dockerfile`!) as `Dockerfile` in the Space root.
+   > ⚠️ **Important:** `Dockerfile` includes heavy dependencies (Playwright/ChromaDB) and will exceed HF Spaces limits.
 3. Add secrets above.
 4. Open the Space URL — dashboard at `/`, health at `/healthz`, WS at `/ws`.
 

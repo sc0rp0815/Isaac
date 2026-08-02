@@ -26,8 +26,8 @@ RUN mkdir -p data logs workspace
 
 EXPOSE 7860
 
-# Health: GET /healthz
-HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \
-  CMD python -c "import os,urllib.request; p=os.environ.get('PORT','7860'); urllib.request.urlopen(f'http://127.0.0.1:{p}/healthz', timeout=3)"
+# Health: GET /healthz (optimiert für Render Free Cold-Starts)
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+  CMD python -c "import os,urllib.request; p=os.environ.get('PORT','7860'); urllib.request.urlopen(f'http://127.0.0.1:{p}/healthz', timeout=8)"
 
 CMD ["python", "isaac_core.py"]
