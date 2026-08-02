@@ -1,5 +1,20 @@
 # Isaac free-cloud image (no billing, slim deps)
+# Multi-stage build for minimal image size
 # Suitable for: Render free, Hugging Face Spaces (Docker), Fly free allowance, Railway trial
+
+# Stage 1: Build dependencies
+FROM python:3.12-slim as builder
+
+WORKDIR /app
+
+# Install build dependencies (for pip compilation)
+RUN apt-get update && apt-get install -y --no-install-recommends gcc && \
+    rm -rf /var/lib/apt/lists/*
+
+COPY requirements-free.txt .
+RUN pip install --user --no-cache-dir -r requirements-free.txt
+
+# Stage 2: Runtime image
 FROM python:3.12-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -9,19 +24,19 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     ISAAC_BIND_HOST=0.0.0.0 \
     ISAAC_DISABLE_VECTOR_MEMORY=1 \
     ACTIVE_PROVIDER=groq \
-    PORT=7860
+    PORT=7860 \
+    PATH="/root/.local/bin:$PATH"
 
 WORKDIR /app
 
-COPY requirements-free.txt .
-RUN pip install --no-cache-dir -r requirements-free.txt
-
-# App source (avoid shipping local .venv / secrets)
+# Copy only necessary files from builder
+COPY --from=builder /root/.local /root/.local
 COPY *.py ./
 COPY dashboard.html ./
 COPY docs ./docs
 COPY scripts ./scripts
-# data dir created at runtime (empty SQLite)
+
+# Runtime directories
 RUN mkdir -p data logs workspace
 
 EXPOSE 7860
