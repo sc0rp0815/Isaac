@@ -493,6 +493,32 @@ def get_ranked_context(
     )
 
 
+_PATH_MENTION_RE = re.compile(
+    r"(?:^|[\s`\"'(])(/?(?:[\w.-]+/)*[\w.-]+\.(?:py|js|ts|tsx|jsx|go|rs|java|md|json|ya?ml|toml))\b",
+    re.I,
+)
+
+
+def extract_mentioned_paths(text: str, *, limit: int = 12) -> list[str]:
+    """Extract path-like tokens from free text for RepoMap personalization."""
+    if not (text or "").strip():
+        return []
+    out: list[str] = []
+    seen: set[str] = set()
+    for m in _PATH_MENTION_RE.finditer(text):
+        p = (m.group(1) or "").strip().lstrip("./")
+        if not p or p in seen:
+            continue
+        # drop pure noise
+        if p.startswith("http"):
+            continue
+        seen.add(p)
+        out.append(p)
+        if len(out) >= limit:
+            break
+    return out
+
+
 def maybe_enrich_retrieval_with_repo_map(
     retrieval_ctx: dict[str, Any],
     *,
@@ -501,6 +527,8 @@ def maybe_enrich_retrieval_with_repo_map(
     root: Path | str | None = None,
     max_tokens: int | None = None,
     decision_trace: Any | None = None,
+    chat_files: Sequence[str] | None = None,
+    mentioned: Sequence[str] | None = None,
 ) -> dict[str, Any]:
     """Optional BLAU enrichment helper for Phase 1.7.
 
@@ -517,11 +545,31 @@ def maybe_enrich_retrieval_with_repo_map(
     if not repo_map_enabled():
         return ctx
 
+    # Auto-extract path mentions from user_input when caller omits mentioned=
+    ment = list(mentioned or [])
+    if not ment:
+        ment = extract_mentioned_paths(user_input or "")
+    # Also scan recent conversation snippets already on retrieval dict
+    if not ment:
+        for entry in (ctx.get("conversation_history") or [])[-4:]:
+            if isinstance(entry, dict):
+                ment.extend(extract_mentioned_paths(str(entry.get("text") or "")))
+        # de-dupe preserve order
+        seen: set[str] = set()
+        uniq: list[str] = []
+        for p in ment:
+            if p not in seen:
+                seen.add(p)
+                uniq.append(p)
+        ment = uniq[:12]
+
     try:
         ranked = get_ranked_context(
             user_input or ctx.get("query") or "",
             max_tokens=max_tokens,
             root=root,
+            chat_files=chat_files,
+            mentioned=ment or None,
         )
     except Exception as exc:
         ctx["code_map_meta"] = {"error": type(exc).__name__, "reason": "exception"}
@@ -536,6 +584,7 @@ def maybe_enrich_retrieval_with_repo_map(
         "backend": ranked.backend,
         "root": ranked.root,
         "enabled": ranked.enabled,
+        "mentioned": ment[:12],
         **ranked.meta,
     }
 
@@ -554,6 +603,7 @@ def maybe_enrich_retrieval_with_repo_map(
                     "root": ranked.root[:200],
                     "enabled": ranked.enabled,
                     "reason": ranked.meta.get("reason", ""),
+                    "mentioned": ment[:8],
                 },
             )
         except Exception:

@@ -16,6 +16,7 @@ from decision_trace import DecisionTrace, TracePhase
 from isaac_core import IsaacKernel, Intent
 from memory import Memory, RetrievalContext
 from repo_map import (
+    extract_mentioned_paths,
     extract_python_tags,
     format_code_map_section,
     get_ranked_context,
@@ -99,6 +100,30 @@ class TestRepoMapPhase11(unittest.TestCase):
         self.assertIn("process_payment", ranked.text)
         # Marketing should rank lower / often omitted under tight budget
         self.assertLessEqual(ranked.token_estimate, 400)
+
+    def test_extract_mentioned_paths_and_boost(self) -> None:
+        paths = extract_mentioned_paths(
+            "Bitte fix in pkg/marketing.py und lies pkg/checkout.py"
+        )
+        self.assertIn("pkg/marketing.py", paths)
+        self.assertIn("pkg/checkout.py", paths)
+        # Mention-only boost should surface marketing even without payment terms
+        ranked = get_ranked_context(
+            "kleine Anpassung",
+            max_tokens=300,
+            root=self.root,
+            mentioned=["pkg/marketing.py"],
+        )
+        self.assertIn("pkg/marketing.py", ranked.files)
+        # Enrich auto-extracts mentions from user_input
+        ctx = maybe_enrich_retrieval_with_repo_map(
+            {},
+            user_input="edit pkg/marketing.py render_banner",
+            intent="code",
+            root=self.root,
+        )
+        self.assertIn("code_map", ctx)
+        self.assertIn("pkg/marketing.py", ctx.get("code_map_meta", {}).get("mentioned") or [])
 
     def test_disabled_returns_empty(self) -> None:
         os.environ["ISAAC_REPO_MAP"] = "0"

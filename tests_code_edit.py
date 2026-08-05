@@ -134,6 +134,25 @@ def greet(name: str) -> str:
         self.assertFalse(res.ok)
         self.assertEqual(res.message, "search_not_found")
 
+    def test_apply_from_model_text_includes_repair_hints(self) -> None:
+        from code_edit import apply_from_model_text
+
+        block = (
+            "pkg/sample.py\n"
+            "<<<<<<< SEARCH\n"
+            "def does_not_exist():\n"
+            "    pass\n"
+            "=======\n"
+            "def x():\n"
+            "    pass\n"
+            ">>>>>>> REPLACE\n"
+        )
+        summary = apply_from_model_text(block, dry_run=True, root=self.root)
+        self.assertFalse(summary.get("ok"))
+        self.assertTrue(summary.get("repair_hints"))
+        self.assertIn("[REPAIR]", summary.get("summary") or "")
+        self.assertIn("SEARCH", (summary.get("summary") or ""))
+
     def test_create_file_with_empty_search(self) -> None:
         hunk = EditHunk(
             path="pkg/new_mod.py",
