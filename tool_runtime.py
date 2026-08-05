@@ -643,6 +643,111 @@ def constitution_gate_for_tool(
     )
 
 
+async def run_git_ops(
+    command_or_op: str,
+    *,
+    root: str | None = None,
+    dry_run: bool | None = None,
+    decision_trace=None,
+    paths: list | None = None,
+    message: str = "",
+) -> dict:
+    """GRÜN helper for native git_ops (Phase 3.7).
+
+    ``command_or_op`` may be a full owner-style string (``git status``) or a short
+    op name: status|diff|commit|restore.
+    Not selected for normal CHAT — Owner path or CODE auto-commit only.
+    """
+    try:
+        from git_ops import (
+            format_git_result,
+            git_commit,
+            git_diff,
+            git_ops_enabled,
+            git_restore,
+            git_status,
+            parse_owner_git_command,
+            run_parsed_git_op,
+        )
+    except Exception as exc:
+        return {"ok": False, "error": f"git_ops_import:{type(exc).__name__}"}
+
+    if not git_ops_enabled():
+        return {"ok": False, "error": "git_ops_disabled"}
+
+    text = (command_or_op or "").strip()
+    if text.lower().startswith("git "):
+        parsed = parse_owner_git_command(text)
+        if parsed is None:
+            return {"ok": False, "error": "unsupported_git_command", "command": text[:120]}
+        res = run_parsed_git_op(
+            parsed, root=root, dry_run=dry_run, decision_trace=decision_trace
+        )
+        d = res.as_dict()
+        d["formatted"] = format_git_result(res)
+        return d
+
+    op = text.lower()
+    if op == "status":
+        res = git_status(root, decision_trace=decision_trace)
+    elif op == "diff":
+        res = git_diff(
+            root, paths=paths, decision_trace=decision_trace
+        )
+    elif op == "commit":
+        res = git_commit(
+            message,
+            paths=paths,
+            root=root,
+            dry_run=dry_run,
+            decision_trace=decision_trace,
+            allow_all_tracked=not paths,
+        )
+    elif op == "restore":
+        res = git_restore(
+            list(paths or []),
+            root=root,
+            dry_run=dry_run,
+            decision_trace=decision_trace,
+        )
+    else:
+        return {"ok": False, "error": f"unknown_op:{op}"}
+    d = res.as_dict()
+    d["formatted"] = format_git_result(res)
+    return d
+
+
+async def run_code_edit_from_model_text(
+    model_text: str,
+    *,
+    dry_run: bool | None = None,
+    root: str | None = None,
+    decision_trace=None,
+) -> dict:
+    """GRÜN helper: structured SEARCH/REPLACE apply (Phase 2.7).
+
+    Not selected opportunistically for CHAT — Executor CODE path calls this
+    only when strategy.allow_tools and model returned edit blocks.
+    Constitution + path roots stay inside code_edit.apply_*.
+    """
+    try:
+        from code_edit import apply_from_model_text, code_edit_enabled
+    except Exception as exc:
+        return {
+            "ok": False,
+            "error": f"code_edit_import:{type(exc).__name__}",
+            "source": "code_edit",
+        }
+    if not code_edit_enabled():
+        return {"ok": False, "error": "code_edit_disabled", "source": "code_edit"}
+    return apply_from_model_text(
+        model_text or "",
+        dry_run=dry_run,
+        root=root,
+        decision_trace=decision_trace,
+    )
+
+
 async def run_selected_tool(
     selection: dict,
     prompt: str,

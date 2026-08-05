@@ -1164,6 +1164,17 @@ class Memory:
                     f"{proc.get('task_type', '')} tools={tools}: "
                     f"{proc.get('trace_summary') or proc.get('intent_hint', '')}"
                 )
+        # Optional RepoMap enrichment (Phase 1) — only if already on dict
+        if data.get("code_map"):
+            try:
+                from repo_map import format_code_map_section
+
+                block = format_code_map_section(data)
+                if block:
+                    sections.append(block)
+            except Exception:
+                sections.append("[code_map]")
+                sections.append(str(data.get("code_map") or "")[:4000])
         return "\n".join(sections).strip()
 
     # ── Kontext-Aufbau für Relay ───────────────────────────────────────────────

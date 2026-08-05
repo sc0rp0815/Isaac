@@ -84,7 +84,9 @@ _CREDENTIAL_MARKERS = (
     "credentials", "credential", "anmeldedaten", "passwort-manager", "passwort manager",
 )
 _NOTIFICATION_MARKERS = ("benachrichtigung", "notification", "notify")
-_GIT_MARKERS = ("git status", "git pull", "git log", "git diff", "git commit")
+_GIT_MARKERS = (
+    "git status", "git pull", "git log", "git diff", "git commit", "git restore", "git fetch",
+)
 _INSTALL_MARKERS = ("installiere", "apt install", "pip install", "pkg install")
 _ISAAC_MARKERS = ("isaac status", "isaac log", "isaac logs", "isaac neustart", "isaac restart")
 _SHOPPING_MARKERS = ("amazon", "ebay", "kleinanzeigen")
@@ -716,7 +718,11 @@ def _extract_notification_text(text: str) -> str:
 
 
 def _extract_git_command(text: str) -> str:
-    m = re.search(r"(git\s+(?:status|pull|log|diff|commit|push|fetch)\b.*)$", text, re.I)
+    m = re.search(
+        r"(git\s+(?:status|pull|log|diff|commit|push|fetch|restore)\b.*)$",
+        text,
+        re.I,
+    )
     return m.group(1).strip() if m else ""
 
 
@@ -827,6 +833,13 @@ def detect_owner_action(text: str) -> Optional[OwnerAction]:
     if app_launch:
         return app_launch
 
+    # Timer/countdown with duration before security_toolkit (tool_id "timer" would steal it)
+    if _contains_any(normalized, _TIMER_MARKERS) or normalized.startswith("timer "):
+        if re.search(r"\d+", normalized):
+            seconds = _extract_timer_seconds(raw)
+            if seconds > 0:
+                return OwnerAction("timer", {"seconds": seconds}, raw=raw)
+
     # Bug bounty (authorized programs only)
     if normalized in {
         "bug bounty",
@@ -901,12 +914,6 @@ def detect_owner_action(text: str) -> Optional[OwnerAction]:
     media_platform, media_query = _extract_media_query(raw)
     if media_platform and media_query:
         return OwnerAction("media_play", {"platform": media_platform, "query": media_query}, raw=raw)
-
-    if _contains_any(normalized, _TIMER_MARKERS) or normalized.startswith("timer "):
-        if re.search(r"\d+", normalized):
-            seconds = _extract_timer_seconds(raw)
-            if seconds > 0:
-                return OwnerAction("timer", {"seconds": seconds}, raw=raw)
 
     alarm_time = _extract_alarm_time(raw)
     if alarm_time or normalized.startswith(("wecker ", "alarm ")) or (
@@ -1094,9 +1101,11 @@ def detect_owner_action(text: str) -> Optional[OwnerAction]:
 
     for alias in sorted(_SITE_ALIASES, key=len, reverse=True):
         if alias in normalized and normalized.startswith(_OPEN_PREFIXES):
-            # Prefer native app when we have a package mapping (e.g. gmail)
-            if alias in _APP_PACKAGES or any(
-                k in alias for k in _APP_PACKAGES
+            # Web/site open by default; native package only with explicit "app"
+            force_app = bool(re.search(r"\bapp\b", normalized))
+            if force_app and (
+                alias in _APP_PACKAGES
+                or any(pkg_name in alias or alias in pkg_name for pkg_name in _APP_PACKAGES)
             ):
                 for pkg_name in sorted(_APP_PACKAGES, key=len, reverse=True):
                     if pkg_name in alias or alias in pkg_name:
@@ -1362,11 +1371,18 @@ def _detect_app_launch(raw: str, normalized: str) -> Optional[OwnerAction]:
         )
         if m_rev:
             candidate = m_rev.group(1).strip()
+            # Site alias reverse form: "youtube starten"
+            for alias in sorted(_SITE_ALIASES, key=len, reverse=True):
+                if candidate == alias:
+                    return OwnerAction("open_target", {"target": alias}, raw=raw)
             for pkg_name in sorted(_APP_PACKAGES, key=len, reverse=True):
                 if candidate == pkg_name or candidate.endswith(" " + pkg_name):
                     return OwnerAction("app_open", {"name": pkg_name}, raw=raw)
-            # fuzzy unknown app name
-            if candidate and len(candidate) >= 2:
+            for intent_name in sorted(_ANDROID_INTENTS, key=len, reverse=True):
+                if candidate == intent_name:
+                    return OwnerAction("app_open", {"name": intent_name}, raw=raw)
+            # single-token unknown only
+            if candidate and " " not in candidate and len(candidate) >= 2:
                 return OwnerAction("app_open", {"name": candidate}, raw=raw)
         return None
 
@@ -1381,6 +1397,18 @@ def _detect_app_launch(raw: str, normalized: str) -> Optional[OwnerAction]:
     if not rest:
         return None
 
+    # Defer specialized Owner handlers (timer/router/wlan/…) — do not steal as app_open
+    if _contains_any(rest, _TIMER_MARKERS) and re.search(r"\d+", rest):
+        return None
+    if _contains_any(rest, _ALARM_MARKERS) and re.search(r"\d+", rest):
+        return None
+    if _contains_any(normalized, _ROUTER_MARKERS):
+        return None
+    if _contains_any(rest, _WLAN_MARKERS) and any(
+        t in rest for t in ("verbind", "status", "scan", "einstellung", "settings")
+    ):
+        return None
+
     # URL in chrome
     m_in = re.search(
         r"^(.+?)\s+(?:in|im|mit)\s+(chrome|browser|firefox)\s*$",
@@ -1393,14 +1421,39 @@ def _detect_app_launch(raw: str, normalized: str) -> Optional[OwnerAction]:
         url = _resolve_open_url(dest)
         return OwnerAction("app_open", {"name": browser, "url": url}, raw=raw)
 
+    force_app = bool(
+        re.search(r"\bapp\b", normalized)
+        or re.match(r"^(starte|öffne|oeffne)(\s+die)?\s+app\s+", normalized)
+    )
+
+    # Site aliases (youtube, github, …) → open_target unless user said "app"
+    for alias in sorted(_SITE_ALIASES, key=len, reverse=True):
+        if rest == alias or rest.startswith(alias + " "):
+            if force_app and (
+                alias in _APP_PACKAGES
+                or any(alias == k or alias.startswith(k) for k in _APP_PACKAGES)
+            ):
+                for pkg_name in sorted(_APP_PACKAGES, key=len, reverse=True):
+                    if pkg_name == alias or alias.startswith(pkg_name):
+                        return OwnerAction(
+                            "app_open",
+                            {"name": pkg_name, "url": _SITE_ALIASES.get(alias, "")},
+                            raw=raw,
+                        )
+            return OwnerAction("open_target", {"target": alias}, raw=raw)
+
     for pkg_name in sorted(_APP_PACKAGES, key=len, reverse=True):
         if rest == pkg_name or rest.startswith(pkg_name + " "):
             return OwnerAction("app_open", {"name": pkg_name}, raw=raw)
     for intent_name in sorted(_ANDROID_INTENTS, key=len, reverse=True):
         if rest == intent_name or rest.startswith(intent_name + " "):
             return OwnerAction("app_open", {"name": intent_name}, raw=raw)
-    # any remaining name → resolve via package search at execute time
-    if rest:
+    # Unknown free-form "öffne X" → leave to main detector (open_target / search / …)
+    # Only force app_open when user said "app" or a short bare name (no multi-word domain tasks)
+    if force_app and rest:
+        return OwnerAction("app_open", {"name": rest}, raw=raw)
+    if rest and " " not in rest and len(rest) >= 2 and not rest.startswith("http"):
+        # bare token e.g. "chrome" already handled; single unknown token → app search
         return OwnerAction("app_open", {"name": rest}, raw=raw)
     return None
 
@@ -2522,10 +2575,36 @@ async def _location_get(action: OwnerAction) -> tuple[str, bool]:
 
 
 async def _git_command(action: OwnerAction) -> tuple[str, bool]:
+    """Owner git: status/diff/commit/restore via native git_ops; else legacy shell.
+
+    Phase 3.7 — no push through git_ops; push/pull/fetch keep shell path with audit.
+    """
     command = str(action.params.get("command") or "").strip()
     if not command:
         return "[Owner] Kein Git-Befehl.", False
     AuditLog.action("OwnerAction", "git_command", command[:120])
+
+    # Block force-push style from owner shell path too (defense in depth)
+    low = command.lower()
+    if re.search(r"\bpush\b", low) and re.search(r"(--force|-f\b)", low):
+        return "[Owner] git push --force ist blockiert.", False
+
+    try:
+        from git_ops import (
+            format_git_result,
+            parse_owner_git_command,
+            run_parsed_git_op,
+        )
+
+        parsed = parse_owner_git_command(command)
+        if parsed is not None:
+            res = run_parsed_git_op(parsed, root=BASE_DIR)
+            text = f"[Owner] {command}\n{format_git_result(res)}"
+            return text.strip(), bool(res.ok)
+    except Exception as exc:
+        log.debug("git_ops owner path fallback: %s", exc)
+
+    # Legacy: pull / fetch / log / push (non-force) / unknown
     cwd = shlex_quote(str(BASE_DIR))
     result = await _shell(f"cd {cwd} && {command}")
     lines = [f"[Owner] {command}", "", result.get("stdout") or result.get("error", "")]

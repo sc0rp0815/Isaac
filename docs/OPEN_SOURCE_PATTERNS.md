@@ -76,6 +76,22 @@ Context7: `CONTEXT7_API_KEY` + `ISAAC_CONTEXT7_ENABLED=1` — siehe [CONTEXT7.md
   - Privilege: kritische `authorize()`-Aktionen laufen durch dasselbe Verfassungs-Gate
   - Konsolidierung: `critical_action_gate()` + `CONSTITUTION_BOUNDARIES` Inventar
 
+### 7. Native Coding Strengths (Aider-inspiriert — kein Package)
+
+Ideen von [Aider](https://github.com/Aider-AI/aider) (RepoMap + SEARCH/REPLACE + Git-Hygiene), **nativ** in Isaac:
+
+| Muster (Aider) | Isaac-Modul | Kontrolle |
+|----------------|-------------|-----------|
+| tree-sitter RepoMap + PageRank | `repo_map.py` (v1: stdlib-ast + Keyword-Ranking) | BLAU; nur `Intent.CODE`; Trace `repo_map_built` |
+| Edit-Blöcke SEARCH/REPLACE | `code_edit.py` | GRÜN; unique exact match; Constitution; `allow_tools` |
+| Git commit durch das Tool | `git_ops.py` | Allowlist-Subcommands; Owner `git …` + optional Auto-Commit |
+| Chat-Dateien steuern Kontext | `chat_files`/mentioned Hooks in RepoMap-API | personalisiertes Ranking |
+
+**Do-NOT:** `import aider`; Language-Pack als Default-Dependency; Fuzzy-Replace bei Mehrdeutigkeit; CHAT→Repo-Write; force-push.
+
+**Evals:** `evals/coding_eval.py` (Routing A–G-ähnlich, RepoMap, E2E Edit+Commit).  
+**Flags:** `ISAAC_REPO_MAP`, `ISAAC_CODE_EDIT`, `ISAAC_CODE_EDIT_DRY_RUN`, `ISAAC_GIT_OPS`, `ISAAC_GIT_OPS_DRY_RUN`, `ISAAC_GIT_OPS_AUTO_COMMIT` (default off).
+
 ## Auswahlregel für künftige Übernahmen
 
 1. Passt es zur Pipeline `classify → retrieve → strategy → task → execute → evaluate → memory`?

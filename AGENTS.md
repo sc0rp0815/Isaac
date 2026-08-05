@@ -53,6 +53,9 @@ Core runtime lives in the repository root.
 | `isaac_core.py` | Kernel — Orchestrator |
 | `executor.py`, `relay.py`, `logic.py` | Execution & LLM |
 | `memory.py`, `low_complexity.py` | Retrieval & Klassifikation |
+| `repo_map.py` | BLAU: gerankter Codebase-Kontext (Aider-Muster, stdlib-ast) |
+| `code_edit.py` | GRÜN: SEARCH/REPLACE-Apply + verify (Constitution) |
+| `git_ops.py` | GRÜN: status/diff/commit/restore (allowlist, kein force-push) |
 | `tool_registry.py`, `tool_runtime.py`, `tool_policy.py` | Tools |
 | `task_checkpoint.py`, `watchdog.py` | Checkpointing & Task-Watchdog |
 | `constitution.py`, `self_model.py` | Governance & Selbstmodell |
@@ -72,8 +75,8 @@ Core runtime lives in the repository root.
 | Ebene | Module | Rolle |
 |-------|--------|-------|
 | **ROT** (Control) | `isaac_core.py`, `low_complexity.py`, `privilege.py`, `sudo_gate.py`, `regelwerk.py`, `constitution.py` | Klassifikation, Routing, Strategy, Governance |
-| **BLAU** (Memory) | `memory.py`, `vector_memory.py`, `ki_dialog.py`, `meaning.py`, `values.py` | Retrieval, Fakten, Direktiven |
-| **GRÜN** (Execution) | `executor.py`, `relay.py`, `tool_runtime.py`, `search.py`, `browser.py`, `decomposer.py` | LLM, Tools, Suche, Browser |
+| **BLAU** (Memory) | `memory.py`, `repo_map.py`, `vector_memory.py`, `ki_dialog.py`, `meaning.py`, `values.py` | Retrieval, Fakten, Direktiven, Code-Map |
+| **GRÜN** (Execution) | `executor.py`, `relay.py`, `tool_runtime.py`, `code_edit.py`, `git_ops.py`, `search.py`, `browser.py`, `decomposer.py` | LLM, Tools, Code-Edits, Git, Suche |
 
 **Entwicklungsrichtung:** vom modularen Nebeneinander zur kausal erklärbaren Vernetzung.
 
@@ -128,6 +131,20 @@ Keine versteckte Tool-Autonomie.
 
 **Besitzt NICHT:** primäre Prompt-Komposition, Routing/Strategy.
 
+### Native Coding (Aider-inspiriert, bounded)
+
+| Modul | Rolle |
+|-------|--------|
+| `repo_map.py` | Gerankter Symbol-Kontext (stdlib-ast, optional Token-Budget); Enrich nur bei `Intent.CODE` |
+| `code_edit.py` | SEARCH/REPLACE planen/anwenden/verify; unique exact match; Constitution + path roots |
+| `git_ops.py` | status/diff/commit/restore; Allowlist; kein force-push; optional Auto-Commit nach Edit |
+
+**Pipeline:** CODE-Intent → Retrieval inkl. RepoMap → Strategy `allow_tools` → Executor CODE (Edit oder Sandbox) → optional `ISAAC_GIT_OPS_AUTO_COMMIT`.
+
+**Do-NOT (Coding):** Aider/wholesale Agent-Import; tree-sitter als Pflicht-Dependency auf main; opportunistische Repo-Edits bei CHAT; force-push / history rewrite; Fuzzy-Apply bei mehrdeutigen SEARCH-Blöcken.
+
+Env: `ISAAC_REPO_MAP`, `ISAAC_CODE_EDIT`, `ISAAC_CODE_EDIT_DRY_RUN`, `ISAAC_GIT_OPS`, `ISAAC_GIT_OPS_DRY_RUN`, `ISAAC_GIT_OPS_AUTO_COMMIT` (default **aus**).
+
 ### `logic.py` / `relay.py` / `monitor_server.py`
 
 - `logic.py`: Quality Scoring, begrenzte Follow-ups
@@ -156,6 +173,7 @@ Keine versteckte Tool-Autonomie.
 - broad speculative redesign
 - trust modeling (gegen Owner)
 - vector-memory redesign, broad persistence redesign
+- Aider/OpenHands/Cline wholesale; snnTorch/Brain-Track ohne Freigabe; ungebundene Auto-Commits (Auto-Commit nur mit `ISAAC_GIT_OPS_AUTO_COMMIT=1`)
 
 ### Explizit erlaubt (Owner-Freigabe 2026-07-15)
 

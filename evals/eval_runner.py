@@ -9,6 +9,7 @@ from evals.replay_eval import run as replay_run
 from evals.regression_eval import run as regression_run
 from evals.mcp_eval import run as mcp_run
 from evals.goal_eval import run as goal_run
+from evals.coding_eval import run as coding_run
 
 
 def run_all() -> dict:
@@ -21,6 +22,7 @@ def run_all() -> dict:
         regression_run(),
         mcp_run(),
         goal_run(),
+        coding_run(),
     ]
     return {
         "ok": all(s["passed"] == s["total"] for s in suites),
@@ -40,6 +42,7 @@ def run_suite(name: str) -> dict:
         "regression": regression_run,
         "mcp": mcp_run,
         "goal": goal_run,
+        "coding": coding_run,
     }
     fn = mapping.get(name)
     if not fn:

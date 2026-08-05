@@ -1049,6 +1049,7 @@ class IsaacKernel:
                 "word_count": classification.word_count,
             },
         )
+        _rm = retrieval_ctx.get("code_map_meta") or {}
         task.decision_trace.add(
             TracePhase.RETRIEVAL,
             "retrieved",
@@ -1056,8 +1057,26 @@ class IsaacKernel:
                 "facts": len(retrieval_ctx.get("relevant_facts", [])),
                 "procedures": len(retrieval_ctx.get("relevant_procedures", [])),
                 "open_questions": len(retrieval_ctx.get("open_questions", [])),
+                "code_map": bool(retrieval_ctx.get("code_map")),
+                "code_map_files": len(_rm.get("files") or []),
+                "code_map_tokens": _rm.get("token_estimate"),
+                "code_map_backend": _rm.get("backend") or "",
             },
         )
+        if retrieval_ctx.get("code_map") or _rm:
+            task.decision_trace.add(
+                TracePhase.RETRIEVAL,
+                "repo_map_built",
+                {
+                    "n_files": len(_rm.get("files") or []),
+                    "n_symbols": _rm.get("n_symbols"),
+                    "tokens": _rm.get("token_estimate"),
+                    "backend": _rm.get("backend") or "",
+                    "root": str(_rm.get("root") or "")[:200],
+                    "enabled": _rm.get("enabled", True),
+                    "reason": _rm.get("reason") or "",
+                },
+            )
         task.decision_trace.add(
             TracePhase.STRATEGY,
             "strategy_selected",
@@ -3637,23 +3656,94 @@ class IsaacKernel:
             return Intent.BROWSER
         return Intent.SEARCH
 
+    def _looks_like_native_coding_task(self, user_input: str) -> bool:
+        """Repo/code-edit work that should take Intent.CODE (Phase 4).
+
+        Stricter than companion ``_looks_like_code_work``: requires path-like
+        tokens and/or explicit edit markers so conceptual chat (e.g. literature
+        "Wetter"-motifs) stays CHAT without tools.
+        """
+        tl = (user_input or "").lower().strip()
+        if not tl:
+            return False
+        if tl.startswith(("code:", "programmiere:", "schreibe python", "schreibe bitte python")):
+            return True
+        if "<<<<<<< search" in tl or ">>>>>>> replace" in tl:
+            return True
+        has_path = bool(
+            re.search(
+                r"(?:^|[\s`\"'(])/?(?:[\w.-]+/)*[\w.-]+\.(?:py|js|ts|tsx|jsx|go|rs|java|md|json|ya?ml|toml)\b",
+                tl,
+            )
+        )
+        edit_verbs = (
+            "änder",
+            "aender",
+            "fix",
+            "patch",
+            "edit",
+            "refaktor",
+            "refactor",
+            "implementier",
+            "reparier",
+            "debug",
+            "bugfix",
+            "schreibe in",
+            "ergänze in",
+            "ergaenze in",
+            "lösche in",
+            "loesche in",
+            "search/replace",
+            "search replace",
+        )
+        has_edit = any(v in tl for v in edit_verbs)
+        if has_path and has_edit:
+            return True
+        # "def foo in bar.py" / function+path without soft verbs
+        if has_path and re.search(
+            r"\b(def|class|function|methode|funktion|import)\b", tl
+        ):
+            return True
+        return False
+
     def _resolve_intent_from_classification(
         self, user_input: str, detected_intent: str, interaction_class: str
     ) -> str:
         # Klassifikation ist die primäre Routing-Authority.
         if interaction_class == InteractionClass.STATUS_QUERY:
             return Intent.STATUS
+        if interaction_class in (
+            InteractionClass.SOCIAL_GREETING,
+            InteractionClass.SOCIAL_ACKNOWLEDGMENT,
+            InteractionClass.SHORT_CLARIFICATION,
+        ):
+            return Intent.CHAT
         if interaction_class == InteractionClass.TOOL_REQUEST:
             tl = (user_input or "").lower().strip()
             if tl.startswith(("agent:", "agent ", "oberfläche:", "oberflaeche:")):
                 return Intent.AGENT
             if detected_intent == Intent.AGENT:
                 return Intent.AGENT
+            # Explicit code:/programmiere: must not collapse to SEARCH
+            if detected_intent == Intent.CODE or self._looks_like_native_coding_task(
+                user_input
+            ):
+                return Intent.CODE
             return self._tool_request_intent(user_input)
 
         # Regex-Intent bleibt nur für explizite Kommandos als Fallback aktiv.
         if detected_intent != Intent.CHAT and self._looks_like_explicit_command(user_input, detected_intent):
             return detected_intent
+
+        # Phase 4: free-form repo coding → CODE (repo_map + code_edit path)
+        if self._looks_like_native_coding_task(user_input):
+            return Intent.CODE
+
+        # Short "code: …" can classify as AMBIGUOUS_SHORT — still honor CODE intent
+        if detected_intent == Intent.CODE and self._looks_like_native_coding_task(
+            user_input
+        ):
+            return Intent.CODE
 
         return Intent.CHAT
 
@@ -3715,11 +3805,23 @@ class IsaacKernel:
             interaction_class=interaction_class,
             n_history=n_hist,
         ).as_dict()
-        return enrich_retrieval_with_self_model(
+        retrieval_ctx = enrich_retrieval_with_self_model(
             retrieval_ctx,
             memory=self.memory,
             user_input=user_input,
         )
+        # Phase 1.7: native RepoMap enrichment (CODE only; fail-soft; no second path)
+        try:
+            from repo_map import maybe_enrich_retrieval_with_repo_map
+
+            retrieval_ctx = maybe_enrich_retrieval_with_repo_map(
+                retrieval_ctx,
+                user_input=user_input,
+                intent=intent,
+            )
+        except Exception:
+            pass
+        return retrieval_ctx
 
     def _select_response_strategy(
         self, user_input: str, intent: str, interaction_class: str, retrieval_ctx: dict[str, Any]

@@ -541,9 +541,16 @@ class SelfModel:
             log.debug("Contradiction memory lookup skipped: %s", exc)
             return contradictions[:12]
 
+        get_rec = getattr(mem, "get_fact_record", None)
+        if not callable(get_rec):
+            return contradictions[:12]
+
         for entry in self.relevant_preferences(limit=12, min_confidence=0.6):
             fact_key = self._preference_fact_key(entry)
-            record = mem.get_fact_record(fact_key)
+            try:
+                record = get_rec(fact_key)
+            except Exception:
+                continue
             if not record:
                 continue
             mem_value = (record.get("value") or "").strip()

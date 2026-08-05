@@ -1361,16 +1361,56 @@ class Executor:
 
     # ── Code-Ausführung (ASYNC, kein blocking!) ───────────────────────────────
     async def _execute_code(self, task: Task):
-        """Generiert Python-Code und führt ihn eingeschränkt im Isolated-Mode aus."""
+        """CODE path: Repo SEARCH/REPLACE edits when allowed, else sandboxed snippet run.
+
+        Phase 2.7:
+          - Structured edits only if strategy.allow_tools and ISAAC_CODE_EDIT
+          - apply via code_edit (Constitution + path roots + DecisionTrace)
+          - No opportunistic edits on CHAT (this method is CODE-only)
+          - Fallback: generate pure Python and run isolated (legacy path)
+        """
         ctx = isaac_ctx("Executor", f"Code ausführen: task {task.id}")
         self.gate.require("execute_code", ctx)
 
-        code_prompt = (
-            f"Schreibe Python-Code für:\n{task.prompt}\n\n"
-            "Antworte NUR mit dem Code ohne Erklärungen oder Markdown."
-        )
+        allow_edits = bool(getattr(task, "allow_tools", False))
+        try:
+            from code_edit import code_edit_enabled, looks_like_edit_blocks
+
+            edits_feature_on = code_edit_enabled()
+        except Exception:
+            edits_feature_on = False
+            looks_like_edit_blocks = lambda _t: False  # type: ignore
+
+        if allow_edits and edits_feature_on:
+            code_prompt = (
+                f"Aufgabe:\n{task.prompt}\n\n"
+                "Wenn du bestehende Dateien im Repo ändern sollst, antworte mit einem oder mehreren "
+                "SEARCH/REPLACE-Blöcken in diesem Format (Dateipfad in der Zeile davor):\n"
+                "path/to/file.py\n"
+                "<<<<<<< SEARCH\n"
+                "exakte alte Zeilen\n"
+                "=======\n"
+                "neue Zeilen\n"
+                ">>>>>>> REPLACE\n\n"
+                "SEARCH muss exakt und eindeutig im File vorkommen.\n"
+                "Wenn du stattdessen nur ein kurzes lauffähiges Python-Snippet brauchst "
+                "(kein Repo-Edit), antworte NUR mit dem Code ohne Markdown."
+            )
+        else:
+            code_prompt = (
+                f"Schreibe Python-Code für:\n{task.prompt}\n\n"
+                "Antworte NUR mit dem Code ohne Erklärungen oder Markdown."
+            )
+
         raw_code, prov = await self.relay.ask_with_fallback(code_prompt, task_id=task.id)
         task.provider_used = prov
+
+        # Phase 2.7: structured repo edit path (Strategy.allow_tools gated)
+        if allow_edits and edits_feature_on and looks_like_edit_blocks(raw_code or ""):
+            handled = await self._execute_code_edits(task, raw_code or "")
+            if handled:
+                return
+
         code = _normalize_code(raw_code)
 
         ok, reason = _validate_generated_code(code)
@@ -1424,6 +1464,168 @@ class Executor:
                     tmp_path.unlink(missing_ok=True)
                 except Exception:
                     pass
+
+    async def _execute_code_edits(self, task: Task, model_text: str) -> bool:
+        """Apply SEARCH/REPLACE from model output. Returns True if path fully handled."""
+        from code_edit import apply_from_model_text, code_edit_dry_run
+
+        try:
+            from config import BASE_DIR
+
+            root = Path(BASE_DIR)
+        except Exception:
+            root = Path.cwd()
+
+        dry = code_edit_dry_run()
+        task.decision_trace.add(
+            TracePhase.EXECUTION,
+            "code_edit_start",
+            {
+                "dry_run": dry,
+                "allow_tools": bool(getattr(task, "allow_tools", False)),
+                "chars": len(model_text or ""),
+            },
+        )
+
+        # apply_from_model_text is sync/IO-bound — run in thread to keep loop free
+        summary = await asyncio.to_thread(
+            apply_from_model_text,
+            model_text,
+            dry_run=dry,
+            root=root,
+            decision_trace=task.decision_trace,
+            stop_on_error=True,
+            skip_constitution=False,
+        )
+
+        if summary.get("reason") == "no_hunks":
+            task.decision_trace.add(
+                TracePhase.EXECUTION,
+                "code_edit_skip",
+                {"reason": "no_hunks"},
+            )
+            return False
+
+        used = getattr(task, "used_tools", None)
+        if isinstance(used, list):
+            used.append({"name": "code_edit", "kind": "code_edit", "via": "executor_code"})
+        else:
+            task.used_tools = [{"name": "code_edit", "kind": "code_edit", "via": "executor_code"}]
+
+        ok = bool(summary.get("ok"))
+        mode = "DRY-RUN" if summary.get("dry_run") else "APPLY"
+        body = summary.get("summary") or ""
+        paths = [
+            (r.get("path") or "")[:120]
+            for r in (summary.get("results") or [])
+            if r.get("ok") and r.get("path")
+        ][:12]
+        task.antwort = (
+            f"[CODE_EDIT:{mode}] hunks={summary.get('n_hunks', 0)} "
+            f"ok={summary.get('n_ok', 0)}\n{body}"
+        )[:4000]
+        task.status = TaskStatus.DONE if ok else TaskStatus.FAILED
+        if not ok:
+            task.fehler = (summary.get("reason") or "code_edit_failed")[:200]
+
+        task.decision_trace.add(
+            TracePhase.EXECUTION,
+            "code_edit_done",
+            {
+                "ok": ok,
+                "dry_run": bool(summary.get("dry_run")),
+                "n_hunks": summary.get("n_hunks"),
+                "n_ok": summary.get("n_ok"),
+                "reason": summary.get("reason"),
+                "paths": paths,
+            },
+        )
+        AuditLog.action(
+            "Executor",
+            "code_edit",
+            f"ok={ok} dry_run={summary.get('dry_run')} hunks={summary.get('n_hunks')}",
+            Level.ISAAC,
+            erfolg=ok,
+        )
+
+        # Phase 3.7: optional auto-commit after successful real writes
+        if (
+            ok
+            and not summary.get("dry_run")
+            and paths
+            and bool(getattr(task, "allow_tools", False))
+        ):
+            git_block = await self._maybe_auto_commit_code_edit(
+                task, root=root, paths=paths
+            )
+            if git_block:
+                task.antwort = (task.antwort + "\n\n" + git_block)[:4000]
+        return True
+
+    async def _maybe_auto_commit_code_edit(
+        self, task: Task, *, root: Path, paths: list[str]
+    ) -> str:
+        """Commit edited paths when ISAAC_GIT_OPS_AUTO_COMMIT=1. Fail-soft."""
+        try:
+            from git_ops import (
+                format_git_result,
+                git_commit,
+                git_ops_auto_commit_enabled,
+                git_ops_enabled,
+            )
+        except Exception:
+            return ""
+        if not git_ops_enabled() or not git_ops_auto_commit_enabled():
+            return ""
+
+        desc = (task.beschreibung or task.prompt or "code edit").strip()
+        # one-line message
+        msg = re.sub(r"\s+", " ", desc)[:160]
+        if not msg:
+            msg = "Isaac code_edit"
+        if not msg.lower().startswith("isaac"):
+            msg = f"Isaac: {msg}"
+
+        task.decision_trace.add(
+            TracePhase.EXECUTION,
+            "git_ops_auto_commit_start",
+            {"paths": paths[:12], "message": msg[:120]},
+        )
+        result = await asyncio.to_thread(
+            git_commit,
+            msg,
+            paths=paths,
+            root=root,
+            dry_run=None,  # honor ISAAC_GIT_OPS_DRY_RUN
+            decision_trace=task.decision_trace,
+            skip_constitution=False,
+            allow_all_tracked=False,
+        )
+        used = getattr(task, "used_tools", None)
+        note = {"name": "git_commit", "kind": "git_ops", "via": "auto_after_code_edit"}
+        if isinstance(used, list):
+            used.append(note)
+        else:
+            task.used_tools = [note]
+
+        task.decision_trace.add(
+            TracePhase.EXECUTION,
+            "git_ops_auto_commit_done",
+            {
+                "ok": result.ok,
+                "message": result.message[:120],
+                "sha": (result.meta or {}).get("sha", ""),
+                "dry_run": result.dry_run,
+            },
+        )
+        AuditLog.action(
+            "Executor",
+            "git_auto_commit",
+            f"ok={result.ok} sha={(result.meta or {}).get('sha', '')[:12]}",
+            Level.ISAAC,
+            erfolg=result.ok,
+        )
+        return format_git_result(result)
 
     # ── File-Task ────────────────────────────────────────────────────────────
     async def _execute_file(self, task: Task):

@@ -93,7 +93,16 @@ async def _run_reliability() -> dict:
     )
 
     cases = [
-        {"name": "checkpoint_written", "ok": bool(cp and cp.get("state_name") == "tool_running"), "detail": cp or {}},
+        # Executor stores normalize_state("tool_running") → "tool_pending" (canonical).
+        {
+            "name": "checkpoint_written",
+            "ok": bool(
+                cp
+                and cp.get("state_name")
+                in ("tool_pending", "tool_running", CheckpointState.TOOL_PENDING)
+            ),
+            "detail": cp or {},
+        },
         {"name": "task_resumable", "ok": bool(ok_resume and task2 and task2.status == TaskStatus.QUEUED), "detail": task2.to_dict() if task2 else {}},
         {
             "name": "interrupted_chat_resume_completes",

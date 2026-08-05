@@ -141,6 +141,12 @@ class TestCriticalBugs(unittest.TestCase):
                     "[semantic_context]\n[semantik] routing context"
                 )
 
+            def get_fact_record(self, key):
+                return None
+
+            def all_facts(self):
+                return {}
+
             def add_conversation(self, *args, **kwargs):
                 return None
 

@@ -34,6 +34,7 @@ Umsetzung: `goal_store` / `motivation` / `goal_inquiry` / `goal_digest` — kein
 |---------|--------|
 | Open Interpreter (Codex harness) | `oi:` / `interpreter:` |
 | Cline / OpenCode / Goose | **nicht** einbauen (redundant zu OI) |
+| [Aider](https://github.com/Aider-AI/aider) | **Muster nativ** (`repo_map`, `code_edit`, `git_ops`) — kein Package |
 
 ## Tier D — Beobachten, nicht installieren
 

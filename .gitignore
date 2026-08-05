@@ -28,3 +28,4 @@ Isaac/
 trans.py
 trans.sh
 trans.sh\\*
+.aider*
