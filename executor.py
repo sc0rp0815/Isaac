@@ -1520,13 +1520,24 @@ class Executor:
             for r in (summary.get("results") or [])
             if r.get("ok") and r.get("path")
         ][:12]
+        fail_paths = [
+            (r.get("path") or "")[:120]
+            for r in (summary.get("results") or [])
+            if not r.get("ok") and r.get("path")
+        ][:8]
         task.antwort = (
             f"[CODE_EDIT:{mode}] hunks={summary.get('n_hunks', 0)} "
             f"ok={summary.get('n_ok', 0)}\n{body}"
         )[:4000]
         task.status = TaskStatus.DONE if ok else TaskStatus.FAILED
         if not ok:
-            task.fehler = (summary.get("reason") or "code_edit_failed")[:200]
+            # Prefer first concrete apply failure over generic partial_or_failed
+            first_fail = ""
+            for r in summary.get("results") or []:
+                if not r.get("ok"):
+                    first_fail = str(r.get("message") or "")[:120]
+                    break
+            task.fehler = (first_fail or summary.get("reason") or "code_edit_failed")[:200]
 
         task.decision_trace.add(
             TracePhase.EXECUTION,
@@ -1538,6 +1549,8 @@ class Executor:
                 "n_ok": summary.get("n_ok"),
                 "reason": summary.get("reason"),
                 "paths": paths,
+                "fail_paths": fail_paths,
+                "repair_hints": len(summary.get("repair_hints") or []),
             },
         )
         AuditLog.action(

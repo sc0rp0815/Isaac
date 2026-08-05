@@ -663,6 +663,7 @@ def apply_from_model_text(
                 all_ok = False
 
     summary_lines = []
+    repair_hints: list[str] = []
     for r in results:
         flag = "ok" if r.ok else "FAIL"
         wr = "written" if r.written else ("dry_run" if r.dry_run else "no_write")
@@ -671,6 +672,15 @@ def apply_from_model_text(
             # keep short
             preview = r.diff_preview.strip().splitlines()[:8]
             summary_lines.extend(f"    {ln}" for ln in preview)
+        if not r.ok:
+            hint = format_repair_hint(r)
+            if hint:
+                repair_hints.append(hint)
+
+    if repair_hints:
+        summary_lines.append("")
+        summary_lines.append("[REPAIR] Sende SEARCH/REPLACE erneut mit exaktem Unique-Match:")
+        summary_lines.extend(repair_hints[:6])
 
     return {
         "ok": all_ok,
@@ -683,4 +693,32 @@ def apply_from_model_text(
         "summary": "\n".join(summary_lines),
         "n_hunks": len(plan.hunks),
         "n_ok": sum(1 for r in results if r.ok),
+        "repair_hints": repair_hints,
     }
+
+
+def format_repair_hint(result: ApplyResult) -> str:
+    """Human/LLM-facing hint when apply fails (no fuzzy apply — exact unique only)."""
+    msg = (result.message or "").strip()
+    path = (result.path or "?").strip()
+    if msg.startswith("search_not_found"):
+        return (
+            f"- {path}: SEARCH-Text nicht gefunden. Kopiere den **exakten** aktuellen "
+            f"Dateiausschnitt (inkl. Einrückung) in <<<<<<< SEARCH."
+        )
+    if msg.startswith("search_ambiguous"):
+        return (
+            f"- {path}: SEARCH ist mehrdeutig ({msg}). Vergrößere den Kontext "
+            f"(mehr umgebende Zeilen), bis der Block eindeutig ist."
+        )
+    if msg.startswith("file_missing"):
+        return f"- {path}: Datei fehlt. Prüfe den Pfad oder nutze leeren SEARCH zum Anlegen."
+    if msg.startswith("constitution_blocked"):
+        return f"- {path}: Verfassung blockiert Write ({msg}). Owner-Freigabe nötig."
+    if msg.startswith("path_blocked") or msg.startswith("path_"):
+        return f"- {path}: Pfad nicht erlaubt ({msg})."
+    if msg == "no_change":
+        return f"- {path}: SEARCH und REPLACE sind identisch — keine Änderung."
+    if msg:
+        return f"- {path}: {msg}"
+    return ""

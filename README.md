@@ -12,6 +12,40 @@ Die Repository-Kontextdateien, Architekturregeln, Sicherheitsprinzipien, Arbeits
 
 Das KI-Modell ist ein Werkzeug zur Ausführung, nicht die autoritative Quelle für Architektur, Sicherheit oder Systemlogik.
 
+## Aktueller Stand (kanonisch · Stand 2026-08)
+
+| Bereich | Status |
+|---------|--------|
+| Phase 1–4 (Stabilize → Connect) | ✅ |
+| Evolution 2.0 + Goal-Autonomie S0–S4 | ✅ |
+| Pipeline | `classify → retrieve → strategy → task → execute → evaluate → memory` |
+| Native Coding (Aider-**Muster**, kein Package) | ✅ `repo_map.py` · `code_edit.py` · `git_ops.py` |
+| Eval-Harness (lokal) | `ISAAC_DISABLE_VECTOR_MEMORY=1 python3 -m evals.eval_runner` → **130/130** |
+| Preferred Remote | `sc0rp0815/Isaac` `main` |
+
+**Kanonische Agent-Anweisung (Code + Routing + Do-NOT):** [`AGENTS.md`](AGENTS.md)  
+Dieses README ist die **philosophische / Governance-Hülle**. Bei Widerspruch gilt: **`AGENTS.md` → Checklisten → dieses README**.
+
+### Native Coding (kurz)
+
+- **BLAU** `repo_map`: gerankter Python-Kontext (stdlib-ast), nur bei `Intent.CODE`
+- **GRÜN** `code_edit`: SEARCH/REPLACE, unique exact match, Constitution + Path-Roots
+- **GRÜN** `git_ops`: status/diff/commit/restore (Allowlist; Auto-Commit default **aus**)
+
+Env (Defaults sicher): `ISAAC_REPO_MAP`, `ISAAC_CODE_EDIT`, `ISAAC_CODE_EDIT_DRY_RUN`, `ISAAC_GIT_OPS`, `ISAAC_GIT_OPS_DRY_RUN`, `ISAAC_GIT_OPS_AUTO_COMMIT=0`.
+
+**Do-NOT (Coding):** Aider wholesale · Fuzzy-Apply · CHAT→Repo-Write · force-push · ungebundene Auto-Commits.
+
+### Validierung (Pflicht vor „fertig“)
+
+```bash
+python3 -m py_compile isaac_core.py executor.py low_complexity.py memory.py repo_map.py code_edit.py git_ops.py
+ISAAC_DISABLE_VECTOR_MEMORY=1 python3 -m unittest \
+  tests_phase_a_stabilization tests_state_io tests_provider_configuration \
+  tests_repo_map tests_code_edit tests_git_ops -q
+ISAAC_DISABLE_VECTOR_MEMORY=1 python3 -m evals.eval_runner
+```
+
 ## Übergeordnete Arbeitsanweisung für KI-Modelle
 
 Jedes KI-Modell, das mit diesem Projekt arbeitet, muss sich an folgende Regeln halten:
@@ -104,6 +138,8 @@ Jede Änderung soll in klaren Phasen erfolgen:
 
 Es gibt keine Zeitvorgabe. Der Prozess darf so lange dauern, wie nötig ist, um sichere und robuste Ergebnisse zu erzielen.
 
+**Praktische Agent-Regel (mit `AGENTS.md`):** Nie `main` direkt ändern · Feature-Branch · nach jedem Substep runnable · Erfolg nur mit echten Checks (Compile/Unittest/Evals), nie nur „gefühlt grün“.
+
 ## Bekannte Anweisungen und Regeln zur Fehlervermeidung
 
 Diese Regeln dienen dazu, typische Fehler, destruktive Änderungen und unkontrollierte Entwicklungen zu vermeiden:
@@ -163,7 +199,13 @@ Nur wenn Phase 1 und 2 abgeschlossen sind:
 - Rückfallweg sicherstellen
 - Änderungen nur so weit treiben wie nötig
 
-## Master-Prompt 1 — Praxisnah / Produktiv
+## Master-Prompts (ergänzend · nicht kanonisch)
+
+Die folgenden Master-Prompts sind **historische / Copy-Paste-Hilfen**.  
+**Operative Autorität für Coding-Agents:** immer zuerst [`AGENTS.md`](AGENTS.md).  
+Phasenlabels in älteren Prompts („prototype → production“) ersetzen **nicht** den aktuellen Stand oben.
+
+### Master-Prompt 1 — Praxisnah / Produktiv
 
 ```text
 You are an autonomous coding agent working on the repository https://github.com/glinkasteffen075-bit/Isaac.
@@ -204,7 +246,7 @@ RULES:
 - If tests fail, rollback immediately and fix before continuing.
 ```
 
-## Master-Prompt 2 — Wissenschaftlich / Architektonisch
+### Master-Prompt 2 — Wissenschaftlich / Architektonisch
 
 ```text
 You are an autonomous coding agent working on the repository https://github.com/glinkasteffen075-bit/Isaac.
@@ -234,7 +276,7 @@ PRINCIPLES:
 - rollback safety
 ```
 
-## Master-Prompt 3 — Agenten-/Produktionsgrad / Copilot-Optimiert
+### Master-Prompt 3 — Agenten-/Produktionsgrad / Copilot-Optimiert
 
 ```text
 You are an autonomous senior software engineering agent and architecture reviewer working on the repository https://github.com/glinkasteffen075-bit/Isaac.
@@ -261,7 +303,7 @@ QUALITY STANDARDS:
 - rollback-safe changes
 ```
 
-## Konsolidierter Master-Prompt für ISAAC
+### Konsolidierter Master-Prompt für ISAAC
 
 ```text
 You are an autonomous senior software engineering agent working on the repository https://github.com/glinkasteffen075-bit/Isaac.
@@ -355,4 +397,4 @@ Jeder KI-Agent, der an diesem Projekt arbeitet, soll dieses Dokument als überge
 
 Der Agent ist kein Ersatz für die Architektur. Der Agent ist ein Werkzeug, das die Architektur ausführt, validiert und weiterentwickelt.
 
-Wenn du willst, kann ich dir im nächsten Schritt auch noch eine „kompakte Version“ dieses README erstellen, die für die Nutzung in einem Agenten- oder Copilot-Setup noch kürzer und direkter formuliert ist.
+**Nächste Lesereihenfolge für Agents:** `AGENTS.md` → `docs/MASTER_ROADMAP_ISAAC_v5_2026-07-24.md` → `docs/OPEN_SOURCE_PATTERNS.md` → dieses README.
